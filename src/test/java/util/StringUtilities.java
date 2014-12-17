@@ -25,15 +25,38 @@ package test.java.util;
 
 
 import java.util.Random;
-import java.util.Random;
  
+/**
+ * Collection utilities for generating random strings of symbols.
+ * @version     %I%, %G%
+ */
 public class StringUtilities {  
     private final static Random RANDOM =  new Random(System.currentTimeMillis());
     
-    public static String randomString(int max_length, int min_length){
-        return randomAscii(min_length + RANDOM.nextInt(max_length - min_length));
-    }
-    
+    /**
+     * Generates random string using specified parameters.
+     * 
+     * @param count     length of resulting string
+     * @param start     number of starting character 
+     *                  in chars array. If both start 
+     *                  and end are zero then used 
+     *                  chars include all letters, numbers
+     *                  and punctuation marks.
+     * @param end       number of end character 
+     *                  in chars array. If both start 
+     *                  and end are zero then used 
+     *                  chars include all letters, numbers
+     *                  and punctuation marks.
+     * @param letters   <code>true</code> if letters should
+     *                  be used in generating of the string
+     * @param numbers   <code>true</code> if numbers should
+     *                  be used in generating of the string
+     * @param chars     char[] array of chars to use. If <code>null</code> then
+     *                  ASCII code table is used.
+     * @param rnd       Random instance used to generate chars.
+     * @see             java.util.Random
+     * @return          String with randomly generated content
+     */
     public static String random(int count, int start, int end, boolean letters, 
             boolean numbers, char[] chars, Random rnd) {
         if (count == 0) {
@@ -94,36 +117,132 @@ public class StringUtilities {
         }
         return new String(buffer);
     }
-    public static String random(int count) {
-        return random(count, false, false);
-    }
-
-    public static String randomAscii(int count) {
-        return random(count, 32, 127, false, false);
-    }
-
-    public static String randomAlphabetic(int count) {
-        return random(count, true, false);
-    }
     
-    public static String randomAlphanumeric(int count) {
-        return random(count, true, true);
-    }
-
-    public static String randomNumeric(int count) {
-        return random(count, false, true);
-    }
-
+    /**
+     * Generates random string using specified parameters.
+     * 
+     * @param count     length of resulting string
+     * @param letters   <code>true</code> if letters should
+     *                  be used in generating of the string
+     * @param numbers   <code>true</code> if numbers should
+     *                  be used in generating of the string
+     * @return          String with randomly generated content
+     */
     public static String random(int count, boolean letters, boolean numbers) {
         return random(count, 0, 0, letters, numbers);
     }
     
+    /**
+     * Generates random string using specified parameters.
+     * 
+     * @param count     length of resulting string
+     * @param start     number of starting character 
+     *                  in chars array. If both start 
+     *                  and end are zero then used 
+     *                  chars include all letters, numbers
+     *                  and punctuation marks.
+     * @param end       number of end character 
+     *                  in chars array. If both start 
+     *                  and end are zero then used 
+     *                  chars include all letters, numbers
+     *                  and punctuation marks.
+     * @param letters   <code>true</code> if letters should
+     *                  be used in generating of the string
+     * @param numbers   <code>true</code> if numbers should
+     *                  be used in generating of the string
+     * @see             java.util.Random
+     * @return          String with randomly generated content
+     */
     public static String random(int count, int start, int end, boolean letters, boolean numbers) {
         return random(count, start, end, letters, numbers, null, RANDOM);
     }
 
+    /**
+     * Generates random string using specified parameters.
+     * 
+     * @param count     length of resulting string
+     * @param start     number of starting character 
+     *                  in chars array. If both start 
+     *                  and end are zero then used 
+     *                  chars include all letters, numbers
+     *                  and punctuation marks.
+     * @param end       number of end character 
+     *                  in chars array. If both start 
+     *                  and end are zero then used 
+     *                  chars include all letters, numbers
+     *                  and punctuation marks.
+     * @param letters   <code>true</code> if letters should
+     *                  be used in generating of the string
+     * @param numbers   <code>true</code> if numbers should
+     *                  be used in generating of the string
+     * @param chars     char[] array of chars to use. If <code>null</code> then
+     *                  ASCII code table is used.
+     * @see             java.util.Random
+     * @return          String with randomly generated content
+     */
     public static String random(int count, int start, int end, boolean letters, boolean numbers, char[] chars) {
         return random(count, start, end, letters, numbers, chars, RANDOM);
+    }
+    
+    /**
+     * Generates string of random length with random content.
+     * 
+     * @param max_length    maximal length of resulting string
+     * @param min_length    minimal length of resulting string
+     * @return              String with randomly generated content
+     *                      containing letters, numbers and punctuation symbols
+     */
+    public static String randomString(int max_length, int min_length){
+        return randomAscii(min_length + RANDOM.nextInt(max_length - min_length));
+    }    
+    
+    /**
+     *  Generates string of random length with random content.
+     * @param count         length of resulting string
+     * @return              String of random content
+     */
+    public static String random(int count) {
+        return random(count, false, false);
+    }
+
+    /**
+     *  Generates string of random length with random content
+     *  using all visible ASCII symbols.
+     * @param count         length of resulting string
+     * @return              String of random content
+     */
+    public static String randomAscii(int count) {
+        return random(count, 32, 127, false, false);
+    }
+
+    /**
+     *  Generates string of random length with random content
+     *  using only letters.
+     * @param count         length of resulting string
+     * @return              String of random content
+     */
+    public static String randomAlphabetic(int count) {
+        return random(count, true, false);
+    }
+    
+    /**
+     *  Generates string of random length with random content
+     *  using letters and numbers.
+     * @param count         length of resulting string
+     * @return              String of random content
+     */
+    public static String randomAlphanumeric(int count) {
+        return random(count, true, true);
+    }
+
+    /**
+     *  Generates string of random length with random content
+     *  using numbers.
+     * @param count         length of resulting string
+     * @return              String of random content
+     */
+    public static String randomNumeric(int count) {
+        return random(count, false, true);
     }
 }
 
