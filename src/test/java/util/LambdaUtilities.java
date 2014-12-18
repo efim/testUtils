@@ -61,17 +61,6 @@ import java.util.stream.Stream;
 
 public class LambdaUtilities {
 
-    public static enum CharType {
-        DIGIT, LOWERCASE, UPPERCASE, SPECIAL
-    }
-
-    public static enum StringPredicateType {
-        START_WTIH, NOT_START_WITH, MORE_THAN_LEN, LESS_THAN_LEN
-    }
-
-    public static enum IntOp {
-        ADD, SUBTRACT, MULTIPLY, DIVIDE, MOD
-    }
 
     public static IntPredicate randomIntPredicate(boolean isUP, int limit) {
         if (isUP) {
@@ -783,5 +772,20 @@ public class LambdaUtilities {
             map = (Map<K, V>) con.newInstance(initSize[0]);
         }
         return (M) map;
+    }
+
+    public static enum CharType {
+
+        DIGIT, LOWERCASE, UPPERCASE, SPECIAL
+    }
+
+    public static enum StringPredicateType {
+
+        START_WTIH, NOT_START_WITH, MORE_THAN_LEN, LESS_THAN_LEN
+    }
+
+    public static enum IntOp {
+
+        ADD, SUBTRACT, MULTIPLY, DIVIDE, MOD
     }
 }
