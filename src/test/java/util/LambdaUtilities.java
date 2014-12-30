@@ -64,50 +64,51 @@ public class LambdaUtilities {
 
     public static IntPredicate randomIntPredicate(boolean isUP, int limit) {
         if (isUP) {
-            return i -> i >= limit;
+            return (i) -> i >= limit;
         } else {
-            return i -> i < limit;
+            return (i) -> i < limit;
         }
     }
 
     public static Predicate<Integer> randomIntegerPredicate(boolean isUP, int limit) {
         if (isUP) {
-            return i -> i >= limit;
+            return (i) -> i >= limit;
         } else {
-            return i -> i < limit;
+            return (i) -> i < limit;
         }
     }
 
     public static LongPredicate randomLongPredicate(boolean isUP, long limit) {
         if (isUP) {
-            return i -> i >= limit;
+            return (i) -> i >= limit;
         } else {
-            return i -> i < limit;
+            return (i) -> i < limit;
         }
     }
 
     public static Predicate<Path> startPathPredicate(Path start) {
-        return p -> p.startsWith(start);
+        return (p) -> p.startsWith(start);
     }
 
     public static <T> Predicate<T> randomGenericPredicate(boolean isUp, T value, Comparator<T> c) {
         if (isUp) {
-            return emp -> c.compare(emp, value) >= 0;
+            return (emp) -> c.compare(emp, value) >= 0;
         }else {
-            return emp -> c.compare(emp, value) < 0;
+            return (emp) -> c.compare(emp, value) < 0;
         }
     }
 
+    //EFIM: value is not used!!!
     public static Predicate<StringBuilder> randomSBPredicate(StringPredicateType type, String value) {
         switch (type) {
             case START_WTIH:
-                return sb -> Character.isDigit(sb.charAt(0));
+                return (sb) -> Character.isDigit(sb.charAt(0));
             case NOT_START_WITH:
-                return sb -> Character.isLowerCase(sb.charAt(0));
+                return (sb) -> Character.isLowerCase(sb.charAt(0));
             case MORE_THAN_LEN:
-                return sb -> Character.isUpperCase(sb.charAt(0));
+                return (sb) -> Character.isUpperCase(sb.charAt(0));
             default:
-                return sb -> !Character.isLetterOrDigit(sb.charAt(0));
+                return (sb) -> !Character.isLetterOrDigit(sb.charAt(0));
         }
     }
 
@@ -115,15 +116,16 @@ public class LambdaUtilities {
             boolean first) {
         switch (startType) {
             case DIGIT:
-                return sb -> Character.isDigit(sb.charAt(first ? 0 : sb.toString().length() - 1));
+                return (sb) -> Character.isDigit(sb.charAt(first ? 0 : sb.toString().length() - 1));
             case LOWERCASE:
-                return sb -> Character.isLowerCase(sb.charAt(first ? 0 : sb.toString().length() - 1));
+                return (sb) -> Character.isLowerCase(sb.charAt(first ? 0 : sb.toString().length() - 1));
             case UPPERCASE:
-                return sb -> Character.isUpperCase(sb.charAt(first ? 0 : sb.toString().length() - 1));
+                return (sb) -> Character.isUpperCase(sb.charAt(first ? 0 : sb.toString().length() - 1));
             default:
-                return sb -> !Character.isLetterOrDigit(sb.charAt(first ? 0 : sb.toString().length() - 1));
+                return (sb) -> !Character.isLetterOrDigit(sb.charAt(first ? 0 : sb.toString().length() - 1));
         }
     }
+    
     public static Function<StringBuilder, Stream<StringBuilder>> genSBFlatMapper(int selected, int unit) {
         switch(selected) {
             case 0:
@@ -132,27 +134,47 @@ public class LambdaUtilities {
             case 1: 
                 return (e) -> { ArrayList<StringBuilder> res = new ArrayList<>(); res.add(e); return res.stream(); };
             case 2:
-                return (e) -> {ArrayList<StringBuilder> res = new ArrayList<>(); int step = e.length() / unit + unit -1;
-                                    for (int i = 0; i < e.length(); i += step)
-                                        res.add(new StringBuilder(e.substring(i, i + step >= e.length() ?
-                                                                                  e.length() - 1 : i + step))); return res.stream();};
+                return new Function<StringBuilder, Stream<StringBuilder>>() {
+
+                    @Override
+                    public Stream<StringBuilder> apply(StringBuilder e) {
+                        ArrayList<StringBuilder> res = new ArrayList<>();
+                        int step = e.length() / unit + unit - 1;
+                        for (int i = 0; i < e.length(); i += step) {
+                            res.add(new StringBuilder(e.substring(i, i + step >= e.length()
+                                    ? e.length() - 1 : i + step)));
+                        }
+                        return res.stream();
+                    }
+                };
             case 3:
             default:
                 //Generate 64 folded flat map
-                return (e) -> {ArrayList<StringBuilder> res = new ArrayList<>(); int step = e.length() / unit + unit -1;
-                                    for (int i = 0; i < e.length(); i+=step) res.add(e); return res.stream();};
+                return new Function<StringBuilder, Stream<StringBuilder>>() {
+
+                    @Override
+                    public Stream<StringBuilder> apply(StringBuilder e) {
+                        ArrayList<StringBuilder> res = new ArrayList<>();
+                        int step = e.length() / unit + unit - 1;
+                        for (int i = 0; i < e.length(); i += step) {
+                            res.add(e);
+                        }
+                        return res.stream();
+                    }
+                };
         }
     }
+    
     public static Function<Integer, Stream<Integer>> genIntegerFlatMapper(int selected) {
         switch (selected) {
             case 0:
                 //Generate a empty collection
-                return ( e) -> {return new ArrayList<Integer>().stream();};
+                return (e) -> {return new ArrayList<Integer>().stream();};
             case 1:
-                return ( e) -> { ArrayList<Integer> res = new ArrayList<>(); res.add(e); return res.stream(); };
+                return (e) -> { ArrayList<Integer> res = new ArrayList<>(); res.add(e); return res.stream(); };
             case 2:
                 //Generate a triangle has different value
-                return ( e ) -> {
+                return (e) -> {
                     ArrayList<Integer> res = new ArrayList<>(); 
                     for (int i = 0; i < e; i++) {
                         res.add(e * (e - 1) / 2 + i);
@@ -161,7 +183,7 @@ public class LambdaUtilities {
                 };
             case 3:
                 //Generate a triangle has different value
-                return ( e ) -> {
+                return (e) -> {
                     ArrayList<Integer> res = new ArrayList<>();
                     for (int i = 0; i < e; i++) {
                         res.add(e);
@@ -170,7 +192,7 @@ public class LambdaUtilities {
                 };
             default:
                 //Generate 64 folded flat map
-                return ( e) -> {
+                return (e) -> {
                     ArrayList<Integer> res = new ArrayList<>(); 
                     for (int i = 0; i < 1 << 6; i++) {
                         res.add(e);
@@ -184,12 +206,12 @@ public class LambdaUtilities {
         switch (selected) {
             case 0:
                 //Generate a empty collection
-                return ( e ) -> { return IntStream.empty();};
+                return (e) -> { return IntStream.empty();};
             case 1:
-                return ( e ) -> { return IntStream.of(e); };
+                return (e) -> { return IntStream.of(e); };
             case 2:
                 //Generate a triangle has different value
-                return ( e ) -> {
+                return (e) -> {
                     int[] res = new int[e];
                     for (int i = 0; i < e; i++) {
                         res[i] = e * (e - 1) / 2 + i;
@@ -198,7 +220,7 @@ public class LambdaUtilities {
                 };
             case 3:
                 //Generate a triangle has different value
-                return ( e ) -> {
+                return (e) -> {
                     int[] res = new int[e];
                     for (int i = 0; i < e; i++) {
                         res[i] = e;
@@ -207,7 +229,7 @@ public class LambdaUtilities {
                 };
             default:
                 //Generate 64 folded flat map
-                return ( e) -> {
+                return (e) -> {
                     int[] res = new int[1 << 6];
                     for (int i = 0; i < 1 << 6; i++) {
                         res[i] = e;
@@ -219,10 +241,19 @@ public class LambdaUtilities {
     
 
     public static Predicate<Character> isDigitCharacterPredicate() {
-        return c -> Character.isDigit(c);
+        return (c) -> Character.isDigit(c);
     }
 
+    //EFIM: why two parameters??
     public static Function<Integer, Integer> posIntegerFunction(boolean isHighest) {
+        if (isHighest) {
+            return (i) -> Integer.valueOf(new StringBuilder().append(i < 0 ? -i : i).reverse().toString()) % 10;
+        } else {
+            return (i) -> i % 10 < 0 ? -i % 10 : i % 10;
+        }
+    }
+    
+    public static IntFunction<Integer> posIntFunction(boolean isHighest) {
         if (isHighest) {
             return i -> Integer.valueOf(new StringBuilder().append(i < 0 ? -i : i).reverse().toString()) % 10;
         } else {
@@ -230,11 +261,13 @@ public class LambdaUtilities {
         }
     }
 
+    //EFIM: make DRY
     public static Function<StringBuilder, CharType> sbGenericFunction(boolean isFirst) {
-        if (isFirst)
-            return i -> Character.isAlphabetic(i.charAt(0)) ? (Character.isUpperCase(i.charAt(0)) ? CharType.UPPERCASE : CharType.LOWERCASE) : (Character.isDigit(i.charAt(0)) ? CharType.DIGIT : CharType.SPECIAL);
-            else
-            return i -> Character.isAlphabetic(i.charAt(i.length() - 1)) ? (Character.isUpperCase(i.charAt(i.length() - 1)) ? CharType.UPPERCASE : CharType.LOWERCASE) : (Character.isDigit(i.charAt(i.length() - 1)) ? CharType.DIGIT : CharType.SPECIAL);
+        if (isFirst) {
+            return (e) -> Character.isAlphabetic(e.charAt(0)) ? (Character.isUpperCase(e.charAt(0)) ? CharType.UPPERCASE : CharType.LOWERCASE) : (Character.isDigit(e.charAt(0)) ? CharType.DIGIT : CharType.SPECIAL);
+        } else {
+            return (e) -> Character.isAlphabetic(e.charAt(e.length() - 1)) ? (Character.isUpperCase(e.charAt(e.length() - 1)) ? CharType.UPPERCASE : CharType.LOWERCASE) : (Character.isDigit(e.charAt(e.length() - 1)) ? CharType.DIGIT : CharType.SPECIAL);
+        }
     }
 
     public static Function<String, Integer> mappingFunction(Map<String, Integer> m, IntOp op, int value) {
@@ -252,18 +285,11 @@ public class LambdaUtilities {
         }
     }
 
-    public static IntFunction<Integer> posIntFunction(boolean isHighest) {
-        if (isHighest) {
-            return i -> Integer.valueOf(new StringBuilder().append(i < 0 ? -i : i).reverse().toString()) % 10;
-        } else {
-            return i -> i % 10 < 0 ? -i % 10 : i % 10;
-        }
-    }
-
     public static BiFunction<Integer, Integer, Integer> randBetweenIntegerFunction() {
         return (t1, t2) -> randBetween(t1, t2);
     }
 
+    //EFIM: this is definetely can be improved!
     public static int randBetween(int low, int up) {
         assert (low < up && low >= 0);
         Random rand = new Random();
@@ -282,6 +308,7 @@ public class LambdaUtilities {
         return i -> i % 10 < 0 ? -i % 10 : i % 10;
     }
 
+    //EFIM research Consumer interface
     public static <T> Consumer<T> reverseConsumer(Set<T> set) {
         return t -> {
             set.add(t);
@@ -374,8 +401,9 @@ public class LambdaUtilities {
     }
 
     public static IntUnaryOperator opIntUnaryOperator(IntOp op, int value) {
-        if(value == 0)
+        if(value == 0) {
             return t -> t;
+        }
         switch (op) {
             case ADD:
                 return t -> t + value;
@@ -390,9 +418,12 @@ public class LambdaUtilities {
         }
     }
 
+    //EFIM is Integer.valueOf is necessary here???
+    //A lot of similar functors, united by high level function??
     public static Function<Integer, Integer> opIntegerFunction(IntOp op, int value) {
-        if(value == 0)
+        if (value == 0) {
             return t -> t;
+        }
         switch (op) {
             case ADD:
                 return t -> Integer.valueOf(t + value);
@@ -408,8 +439,9 @@ public class LambdaUtilities {
     }
 
     public static ToIntFunction<Integer> opToIntFunction(IntOp op, int value) {
-        if(value == 0)
+        if (value == 0) {
             return t -> t.intValue();
+        }
         switch (op) {
             case ADD:
                 return t -> t.intValue() + value;
@@ -425,8 +457,9 @@ public class LambdaUtilities {
     }
 
     public static IntFunction<Integer> opIntFunction(IntOp op, int value) {
-        if(value == 0)
+        if (value == 0) {
             return t -> t;
+        }
         switch (op) {
             case ADD:
                 return t -> t + value;
