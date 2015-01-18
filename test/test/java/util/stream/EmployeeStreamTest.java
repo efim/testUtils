@@ -56,6 +56,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import static org.testng.Assert.assertEquals;
@@ -772,46 +773,60 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         return all;
     }
 
+    private void verifyList(Supplier<Object> keySupplier, 
+            BiConsumer<Employee, Object> assertion, 
+            Map<Object, List<Employee>> result) {
+        Object key = keySupplier.get();
+        List<Employee> list = result.get(key);
+        for (Employee e : list) {
+            assertion.accept(e, key);
+        }
+    }
+    
     private void verifyGroupBy(Map<Object, List<Employee>> result, Collection<Employee> employees, Employee.Rule rule) {
         Set<Employee> hashEm = new HashSet(employees);
         Iterator<?> keyiter = result.keySet().iterator();
         while (keyiter.hasNext()) {
             switch (rule) {
                 case AGE:
-                    Integer ageKey = (Integer) keyiter.next();
-                    List<Employee> ageEmList = result.get(ageKey);
-                    for (Employee e : ageEmList) {
-                        assertEquals(e.getAge() / 10, ageKey.intValue());
-                    }
+                    verifyList(
+                            () -> keyiter.next(),
+                            (e, key) -> {
+                                Integer ageKey = (Integer) key;
+                                assertEquals(e.getAge() / 10, ageKey.intValue());
+                            },
+                            result);                    
                     break;
+                    
                 case SALARY:
-                    String salaryKey = (String) keyiter.next();
-                    List<Employee> salarayEmList = result.get(salaryKey);
-                    for (Employee e : salarayEmList) {
-                        assertEquals(e.getSalary() <= 6000 ? "LOW"
-                                : (e.getSalary() > 15000 ? "HIGH" : "MEDIUM"), salaryKey);
-                    }
+                    verifyList(
+                            () -> keyiter.next(),
+                            (e, key) -> assertEquals(e.getSalary() <= 6000 ? "LOW"
+                                : (e.getSalary() > 15000 ? "HIGH" : "MEDIUM"), key),
+                            result);
                     break;
+                    
                 case MALE:
-                    Boolean genderKey = (Boolean) keyiter.next();
-                    List<Employee> genderEmList = result.get(genderKey);
-                    for (Employee e : genderEmList) {
-                        assertEquals(Boolean.valueOf(e.isMale()), genderKey);
-                    }
+                    verifyList(
+                            () -> keyiter.next(),
+                            (e, key) -> assertEquals(Boolean.valueOf(e.isMale()), key),
+                            result);
                     break;
+                    
                 case TITLE:
-                    Employee.Title titleKey = (Employee.Title) keyiter.next();
-                    List<Employee> titleEmList = result.get(titleKey);
-                    for (Employee e : titleEmList) {
-                        assertEquals(e.getTitle(), titleKey);
-                    }
+                    verifyList(
+                            () -> keyiter.next(),
+                            (e, key) -> assertEquals(e.getTitle(), key),
+                            result);
                     break;
                 case ID:
-                    Integer idKey = (Integer) keyiter.next();
-                    List<Employee> idEmList = result.get(idKey);
-                    for (Employee e : idEmList) {
-                        assertEquals(e.getId().length(), idKey.intValue());
-                    }
+                    verifyList(
+                            () -> keyiter.next(),
+                            (e, key) -> {
+                                Integer idKey = (Integer) key;
+                                assertEquals(e.getId().length(), idKey.intValue());
+                            },
+                            result);
                     break;
                 default:
                     break;
