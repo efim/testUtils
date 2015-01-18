@@ -51,7 +51,9 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -115,6 +117,22 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         return result.toArray();
     }
 
+    private static Function<Employee, Stream<Employee>> genStream(
+            Function<Employee, Function<Employee, Consumer<Integer>>> action, boolean isDefault) {
+        return (e) -> {
+                            ArrayList<Employee> res = new ArrayList<>();
+                            for (int i = 0; i < e.getId().length(); i += 2) {
+                                Employee employee = e.clone();
+                                if (!isDefault) {
+                                    action.apply(e).apply(employee).accept(i);
+                                }
+                                employee.setId(e.getId());
+                                res.add(employee);
+                            }
+                            return res.stream();
+                        };
+    }
+    
     private static Function<Employee, Stream<Employee>> genEmployeeFlatMapper(int selected, Employee.Rule rule) {
         switch (selected) {
             case 0:
@@ -131,58 +149,19 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             case 2:
                 switch (rule) {
                     case AGE:
-                        return (e) -> {
-                            ArrayList<Employee> res = new ArrayList<>();
-                            for (int i = 0; i < e.getAge(); i += e.getAge() / 10) {
-                                Employee employee = e.clone();
-                                employee.setId(e.getId());
-                                employee.setAge(e.getAge() * (e.getAge() - 1) / 2 + i);
-                                res.add(employee);
-                            }
-                            return res.stream();
-                        };
+                        return genStream(e -> employee -> i -> employee.setAge(e.getAge() * (e.getAge() - 1) / 2 + i), false);
+                        
                     case SALARY:
-                        return (e) -> {
-                            ArrayList<Employee> res = new ArrayList<>();
-                            for (int i = 0; i < (int) e.getSalary(); i += (int) e.getSalary() / 10) {
-                                Employee employee = e.clone();
-                                employee.setId(e.getId());
-                                employee.setSalary(e.getSalary() * (e.getSalary() - 1) / 2 + i);
-                                res.add(employee);
-                            }
-                            return res.stream();
-                        };
+                        return genStream(e -> employee -> i -> employee.setSalary(e.getSalary() * (e.getSalary() - 1) / 2 + i), false);
+                        
                     case MALE:
-                        return (e) -> {
-                            Employee employee = e.clone();
-                            employee.setMale(!e.isMale());
-                            employee.setId(e.getId());
-                            ArrayList<Employee> res = new ArrayList<>();
-                            res.add(employee);
-                            return res.stream();
-                        };
+                        return genStream(e -> employee -> i -> employee.setMale(!e.isMale()), false);
+                        
                     case TITLE:
-                        return (e) -> {
-                            ArrayList<Employee> res = new ArrayList<>();
-                            for (int i = 0; i < e.getTitle().ordinal(); i++) {
-                                Employee employee = e.clone();
-                                employee.setTitle(Employee.Title.values()[i]);
-                                employee.setId(e.getId());
-                                res.add(employee);
-                            }
-                            return res.stream();
-                        };
+                        return genStream(e -> employee -> i -> employee.setTitle(Employee.Title.values()[i]), false);
                     case ID:
                     default:
-                        return (e) -> {
-                            ArrayList<Employee> res = new ArrayList<>();
-                            for (int i = 0; i < e.getId().length(); i += 2) {
-                                Employee employee = e.clone();
-                                employee.setId(e.getId());
-                                res.add(employee);
-                            }
-                            return res.stream();
-                        };
+                        return genStream(null, true);
                 }
             case 3:
             default:
@@ -837,102 +816,6 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
                 default:
                     break;
             }
-        }
-    }
-
-    private void verifyMultiFunction(Collection<Employee> orig, List<Employee> result, int selected, int unit, Employee.Rule rule) throws Exception {
-        Comparator<Employee> cmp = rule.getComparator();
-        switch (selected) {
-            case 0:
-                assertEquals(result.size(), 0);
-                break;
-            case 1:
-                List<Employee> l1 = new ArrayList<>(orig);
-                Collections.sort(l1, cmp);
-                Collections.sort(result, cmp);
-                assertEquals(l1, result);
-                break;
-            case 2:
-                List<Employee> l2 = new ArrayList<>();
-                Iterator<Employee> it2 = orig.iterator();
-                switch (rule) {
-                    case AGE:
-                        while (it2.hasNext()) {
-                            Employee cur = it2.next();
-                            for (int i = 0; i < cur.getAge(); i++) {
-                                Employee employee = new Employee();
-                                employee.setAge(cur.getAge() * (cur.getAge() - 1) / 2 + i);
-                                l2.add(employee);
-                            }
-                        }
-                        break;
-                    case SALARY:
-                        l2 = new ArrayList<>();
-                        it2 = orig.iterator();
-                        while (it2.hasNext()) {
-                            Employee cur = it2.next();
-                            for (int i = 0; i < cur.getSalary(); i++) {
-                                Employee employee = new Employee();
-                                employee.setSalary(cur.getSalary() * (cur.getSalary() - 1) / 2 + i);
-                                l2.add(employee);
-                            }
-                        }
-                        break;
-                    case ID:
-                        l2 = new ArrayList<>();
-                        it2 = orig.iterator();
-                        while (it2.hasNext()) {
-                            Employee cur = it2.next();
-                            int step = cur.getId().length() / unit + unit - 1;
-                            for (int i = 0; i < cur.getId().length(); i += step) {
-                                Employee employee = new Employee();
-                                employee.setId(new String(cur.getId().substring(i, i + step >= cur.getId().length() ? cur.getId().length() - 1 : i + step)));
-                                l2.add(employee);
-                            }
-                        }
-                        break;
-                    case MALE:
-                        l2 = new ArrayList<>();
-                        it2 = orig.iterator();
-                        while (it2.hasNext()) {
-                            Employee cur = it2.next();
-                            Employee employee = new Employee();
-                            employee.setMale(!cur.isMale());
-                            l2.add(employee);
-                        }
-                        break;
-                    case TITLE:
-                        l2 = new ArrayList<>();
-                        it2 = orig.iterator();
-                        while (it2.hasNext()) {
-                            Employee cur = it2.next();
-                            for (int i = 0; i < cur.getTitle().ordinal(); i++) {
-                                Employee employee = new Employee();
-                                employee.setTitle(Employee.Title.values()[i]);
-                                l2.add(employee);
-                            }
-                        }
-                        break;
-                }
-                Collections.sort(l2, cmp);
-                Collections.sort(result, cmp);
-                assertEquals(l2, result);
-                break;
-            case 3:
-                List<Employee> l3 = new ArrayList<>();
-                Iterator<Employee> it3 = orig.iterator();
-                while (it3.hasNext()) {
-                    Employee current = it3.next();
-                    for (int i = 0; i < unit; i++) {
-                        l3.add(current);
-                    }
-                }
-                Collections.sort(l3, cmp);
-                Collections.sort(result, cmp);
-                assertEquals(l3, result);
-                break;
-            default:
-                break;
         }
     }
 
