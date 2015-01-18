@@ -22,6 +22,7 @@ package test.java.util.stream;
  * questions.
  */
 
+import java.awt.dnd.DnDConstants;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,6 +70,7 @@ import test.java.util.LambdaUtilities;
 import test.java.util.StringUtilities;
 
 public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest {
+    
 
     private final static int DATA_SIZE = 1 << 10;
 
@@ -148,22 +150,9 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
                     return res.stream();
                 };
             case 2:
-                switch (rule) {
-                    case AGE:
-                        return genStream(e -> employee -> i -> employee.setAge(e.getAge() * (e.getAge() - 1) / 2 + i), false);
-                        
-                    case SALARY:
-                        return genStream(e -> employee -> i -> employee.setSalary(e.getSalary() * (e.getSalary() - 1) / 2 + i), false);
-                        
-                    case MALE:
-                        return genStream(e -> employee -> i -> employee.setMale(!e.isMale()), false);
-                        
-                    case TITLE:
-                        return genStream(e -> employee -> i -> employee.setTitle(Employee.Title.values()[i]), false);
-                    case ID:
-                    default:
-                        return genStream(null, true);
-                }
+                RuleAction action = actOnRule(rule);
+                return action.genEmployeeFlatMapperByRule();
+                
             case 3:
             default:
                 return (e) -> {
@@ -177,20 +166,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
     }
 
     private static Function<Employee, Object> employeeGenericFunction(Employee.Rule rule) {
-        switch (rule) {
-            case AGE:
-                return e -> e.getAge() / 10;
-            case SALARY:
-                return e -> e.getSalary() <= 6000 ? "LOW" : (e.getSalary() > 15000 ? "HIGH" : "MEDIUM");
-            case MALE:
-                return e -> e.isMale();
-            case TITLE:
-                return e -> e.getTitle();
-            case ID:
-                return e -> e.getId().length();
-            default:
-                throw new RuntimeException("No such rule");
-        }
+        RuleAction action = actOnRule(rule);
+        return action.employeeGenericFunction();
     }
 
     private Class<T> typeObject;
@@ -208,6 +185,134 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         }
     }
 
+    private static RuleAction actOnRule(Employee.Rule rule) {
+        switch (rule) {
+            case AGE:
+                return new RuleAction() {
+                    
+                    @Override
+                    public Function<Employee, Stream<Employee>> genEmployeeFlatMapperByRule() {
+                        return genStream(e -> employee -> i -> employee.setAge(e.getAge() * (e.getAge() - 1) / 2 + i), false);
+                    }
+                    
+                    @Override
+                    public Function<Employee, Object> employeeGenericFunction() {
+                        return e -> e.getAge() / 10;
+                    }
+                    
+                    @Override
+                    public void verifyGroubBy(Object key, List<Employee> list) {
+                        verifyList(key, list,
+                                (e, keyVar) -> {
+                                    Integer ageKey = (Integer) keyVar;
+                                    assertEquals(e.getAge() / 10, ageKey.intValue());
+                                });
+                    }
+                };
+            case SALARY:
+                return new RuleAction() {
+                    
+                    @Override
+                    public Function<Employee, Stream<Employee>> genEmployeeFlatMapperByRule() {
+                        return genStream(e -> employee -> i -> employee.setSalary(e.getSalary() * (e.getSalary() - 1) / 2 + i), false);
+                    }
+                    
+                    @Override
+                    public Function<Employee, Object> employeeGenericFunction() {
+                        return e -> e.getSalary() <= 6000 ? "LOW" : (e.getSalary() > 15000 ? "HIGH" : "MEDIUM");
+                    }
+                    
+                    @Override
+                    public void verifyGroubBy(Object key, List<Employee> list) {
+                        verifyList(
+                                key, list,
+                                (e, keyVar) -> assertEquals(e.getSalary() <= 6000 ? "LOW"
+                                        : (e.getSalary() > 15000 ? "HIGH" : "MEDIUM"), keyVar));
+                    }
+                };
+            case MALE:
+                return new RuleAction() {
+                    
+                    @Override
+                    public Function<Employee, Stream<Employee>> genEmployeeFlatMapperByRule() {
+                        return genStream(e -> employee -> i -> employee.setMale(!e.isMale()), false);
+                    }
+                    
+                    @Override
+                    public Function<Employee, Object> employeeGenericFunction() {
+                        return e -> e.isMale();
+                    }
+                    
+                    @Override
+                    public void verifyGroubBy(Object key, List<Employee> list) {
+                        verifyList(key, list,
+                                (e, keyVar) -> assertEquals(Boolean.valueOf(e.isMale()), keyVar));
+                    }
+                };
+            case TITLE:
+                return new RuleAction() {
+                    
+                    @Override
+                    public Function<Employee, Stream<Employee>> genEmployeeFlatMapperByRule() {
+                        return genStream(e -> employee -> i -> employee.setTitle(Employee.Title.values()[i]), false);
+                    }
+                    
+                    @Override
+                    public Function<Employee, Object> employeeGenericFunction() {
+                        return e -> e.getTitle();
+                    }
+                    
+                    @Override
+                    public void verifyGroubBy(Object key, List<Employee> list) {
+                        verifyList(
+                                key, list,
+                                (e, keyVar) -> assertEquals(e.getTitle(), keyVar));
+                    }
+                };
+            case ID:
+                return new RuleAction() {
+                    
+                    @Override
+                    public Function<Employee, Stream<Employee>> genEmployeeFlatMapperByRule() {
+                        return genStream(null, true);
+                    }
+                    
+                    @Override
+                    public Function<Employee, Object> employeeGenericFunction() {
+                        return e -> e.getId().length();
+                    }
+                    
+                    @Override
+                    public void verifyGroubBy(Object key, List<Employee> list) {
+                        verifyList(
+                                key, list,
+                                (e, keyVar) -> {
+                                    Integer idKey = (Integer) keyVar;
+                                    assertEquals(e.getId().length(), idKey.intValue());
+                                });
+                    }
+                };
+            default:
+                return new RuleAction() {
+                    
+                    @Override
+                    public Function<Employee, Stream<Employee>> genEmployeeFlatMapperByRule() {
+                        return genStream(null, true);
+                    }
+                    
+                    @Override
+                    public Function<Employee, Object> employeeGenericFunction() {
+                        throw new RuntimeException("No such rule");
+                    }
+                    
+                    @Override
+                    public void verifyGroubBy(Object key, List<Employee> list) {
+                        //do nothing
+                    }
+                };
+        }
+    }
+    
     @Override
     public String getTestName() {
         return typeObject.getName() + "<Employee>";
@@ -232,7 +337,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
 
             // Empty stream's allMatch will return true always
             @SuppressWarnings("cast")
-            Collection<Employee> emptyCol = hasIni
+                    Collection<Employee> emptyCol = hasIni
                     ? (Collection<Employee>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
@@ -260,8 +365,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
 
             // Empty stream's anyMatch, noneMatch will return false always
             @SuppressWarnings("cast")
-            Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                    .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
+                    Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
+                            .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
             assertTrue(!stream2.anyMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())));
@@ -360,7 +465,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
 
             result1 = stream.filter(p1).filter(e -> false).collect(Collectors.toCollection(LinkedList<Employee>::new));
             assertTrue(result1.isEmpty());
-
+            
             // Create another predicates with random limit and random up/down size 
             Employee limit2 = generateData();
             limit2.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
@@ -402,8 +507,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             assertEquals(concatList, result3);
 
             @SuppressWarnings("cast")
-            Collection<Employee> emptyList = hasIni ? (Collection<Employee>) LambdaUtilities.create(typeObject,
-                    initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
+                    Collection<Employee> emptyList = hasIni ? (Collection<Employee>) LambdaUtilities.create(typeObject,
+                            initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> stream3 = (type == ParallelType.Parallel) ? emptyList.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyList.stream().sequential() : emptyList.stream();
             assertFalse(stream3.filter(p1).iterator().hasNext());
@@ -430,8 +535,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             }
 
             @SuppressWarnings("cast")
-            Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                    .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
+                    Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
+                            .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> emptyStream1 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
             java.util.Optional<Employee> emptyAny = emptyStream1.findAny();
@@ -453,7 +558,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             Collection<Employee> c = generateData(DATA_SIZE);
             Stream<Employee> stream = (type == ParallelType.Parallel) ? c.parallelStream()
                     : (type == ParallelType.Sequential) ? c.stream().sequential()
-                            : c.stream();
+                    : c.stream();
             stream.forEach(t -> {
                 assertTrue(c.contains(t));
             });
@@ -470,19 +575,19 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
 
             Stream<Employee> stream = (type == ParallelType.Parallel) ? c.parallelStream()
                     : (type == ParallelType.Sequential) ? c.stream().sequential()
-                            : c.stream();
+                    : c.stream();
             Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
             Map<Object, List<Employee>> result
                     = stream.collect(Collectors.groupingBy(employeeGenericFunction(rule)));
             verifyGroupBy(result, c, rule);
 
             @SuppressWarnings("cast")
-            Collection<Employee> emptyList = hasIni
+                    Collection<Employee> emptyList = hasIni
                     ? (Collection<Employee>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> emptyStream = (type == ParallelType.Parallel) ? emptyList.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyList.stream().sequential()
-                            : emptyList.stream();
+                    : emptyList.stream();
             assertTrue(emptyStream.collect(Collectors.groupingBy(employeeGenericFunction(rule))).isEmpty());
         }
     }
@@ -534,8 +639,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
                 assertEquals(rule.getValue(optional.get()), rule.getValue(getMax3(col, c)));
 
                 @SuppressWarnings("cast")
-                Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                        .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
+                        Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
+                                .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
                 Stream<Employee> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                         : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
                 assertFalse(emptyStream.max(c).isPresent());
@@ -564,8 +669,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
                 assertEquals(rule.getValue(optional.get()), rule.getValue(getMin3(col, c)));
 
                 @SuppressWarnings("cast")
-                Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                        .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
+                        Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
+                                .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
                 Stream<Employee> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                         : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
                 assertFalse(emptyStream.min(c).isPresent());
@@ -592,8 +697,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
 
             // Empty stream's noneMatch will return true always
             @SuppressWarnings("cast")
-            Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                    .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
+                    Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
+                            .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
             assertTrue(stream2.noneMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())));
@@ -616,30 +721,30 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
                     : rand.nextInt(Integer.MAX_VALUE);
             Stream<Employee> stream1 = (type == ParallelType.Parallel) ? col.parallelStream()
                     : (type == ParallelType.Sequential) ? col.stream().sequential()
-                            : col.stream();
+                    : col.stream();
             Iterator<Employee> it = stream1.skip(skip).limit(limit).iterator();
             verifySlice(col.iterator(), it, skip, limit);
 
             //limit=0 causes empty stream
             Stream<Employee> stream2 = (type == ParallelType.Parallel) ? col.parallelStream()
                     : (type == ParallelType.Sequential) ? col.stream().sequential()
-                            : col.stream();
+                    : col.stream();
             assertFalse(stream2.skip(skip).limit(0).iterator().hasNext());
 
             //skip exceed collection size cause  empty stream
             Stream<Employee> stream3 = (type == ParallelType.Parallel) ? col.parallelStream()
                     : (type == ParallelType.Sequential) ? col.stream().sequential()
-                            : col.stream();
+                    : col.stream();
             int skipExceeded = bf.apply(col.size(), Integer.MAX_VALUE);
             assertFalse(stream3.skip(skipExceeded).limit(1).iterator().hasNext());
 
             @SuppressWarnings("cast")
-            Collection<Employee> emptyCol = hasIni
+                    Collection<Employee> emptyCol = hasIni
                     ? (Collection<Employee>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.stream().sequential()
-                            : emptyCol.stream();
+                    : emptyCol.stream();
             assertFalse(emptyStream.skip(skip).limit(limit).iterator().hasNext());
         }
     }
@@ -671,7 +776,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             }
 
             @SuppressWarnings("cast")
-            Collection<Employee> emptyCol = hasIni
+                    Collection<Employee> emptyCol = hasIni
                     ? (Collection<Employee>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
@@ -697,7 +802,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             }
 
             @SuppressWarnings("cast")
-            Collection<Employee> emptyCol = hasIni
+                    Collection<Employee> emptyCol = hasIni
                     ? (Collection<Employee>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<Employee>) LambdaUtilities.create(typeObject);
             Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
@@ -742,8 +847,9 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         element.setTitle(Employee.Title.values()[idx]);
         return element;
     }
-
-    private boolean verifyMatch(Collection<Employee> c, Employee limit, boolean isUP, boolean all, Employee.Rule rule) {
+    
+    private boolean verifyMatch(Collection<Employee> c, Employee limit, boolean isUP, boolean all, Employee.Rule rule)
+    {
         Comparator<Employee> cmp = rule.getComparator();
         Iterator<Employee> it = c.iterator();
         while (it.hasNext()) {
@@ -772,12 +878,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         }
         return all;
     }
-
-    private void verifyList(Supplier<Object> keySupplier, 
-            BiConsumer<Employee, Object> assertion, 
-            Map<Object, List<Employee>> result) {
-        Object key = keySupplier.get();
-        List<Employee> list = result.get(key);
+    
+    private static void verifyList(Object key, List<Employee> list, BiConsumer<Employee, Object> assertion) {
         for (Employee e : list) {
             assertion.accept(e, key);
         }
@@ -787,50 +889,10 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         Set<Employee> hashEm = new HashSet(employees);
         Iterator<?> keyiter = result.keySet().iterator();
         while (keyiter.hasNext()) {
-            switch (rule) {
-                case AGE:
-                    verifyList(
-                            () -> keyiter.next(),
-                            (e, key) -> {
-                                Integer ageKey = (Integer) key;
-                                assertEquals(e.getAge() / 10, ageKey.intValue());
-                            },
-                            result);                    
-                    break;
-                    
-                case SALARY:
-                    verifyList(
-                            () -> keyiter.next(),
-                            (e, key) -> assertEquals(e.getSalary() <= 6000 ? "LOW"
-                                : (e.getSalary() > 15000 ? "HIGH" : "MEDIUM"), key),
-                            result);
-                    break;
-                    
-                case MALE:
-                    verifyList(
-                            () -> keyiter.next(),
-                            (e, key) -> assertEquals(Boolean.valueOf(e.isMale()), key),
-                            result);
-                    break;
-                    
-                case TITLE:
-                    verifyList(
-                            () -> keyiter.next(),
-                            (e, key) -> assertEquals(e.getTitle(), key),
-                            result);
-                    break;
-                case ID:
-                    verifyList(
-                            () -> keyiter.next(),
-                            (e, key) -> {
-                                Integer idKey = (Integer) key;
-                                assertEquals(e.getId().length(), idKey.intValue());
-                            },
-                            result);
-                    break;
-                default:
-                    break;
-            }
+            Object key = keyiter.next();
+            List<Employee> list = result.get(key);
+            RuleAction action = actOnRule(rule);
+            action.verifyGroubBy(key, list);
         }
     }
 
@@ -863,9 +925,9 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
     }
 
     /*
-     * c could be reversed order, we can't use MAX_VALUE or MIN_VALUE but we can
-     * use 1st element to compare with.
-     */
+    * c could be reversed order, we can't use MAX_VALUE or MIN_VALUE but we can
+    * use 1st element to compare with.
+    */
     private Employee getMin1(Collection<Employee> col, Comparator<Employee> c) {
         assert (!col.isEmpty());
         Iterator<Employee> it = col.iterator();
@@ -903,7 +965,15 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         while (itOrg.hasNext() && pos++ < limit) {
             assertEquals(itOrg.next(), itSliced.next());
         }
+    }
 
+    private interface RuleAction {
+
+        Function<Employee, Stream<Employee>> genEmployeeFlatMapperByRule();
+
+        Function<Employee, Object> employeeGenericFunction();
+
+        void verifyGroubBy(Object key, List<Employee> list);
     }
 
     enum ParallelType {
