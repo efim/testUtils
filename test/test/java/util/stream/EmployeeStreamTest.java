@@ -320,15 +320,20 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
     public String getTestName() {
         return typeObject.getName() + "<Employee>";
     }
-
-    private Stream<Employee> getEmployeeStreamFromData(ParallelType type) throws Exception {
-        Collection<Employee> c1 = generateData(DATA_SIZE);
-        Stream<Employee> stream = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.stream().sequential() : c1.stream();
-        return stream;
+   
+    private Predicate<Employee> getRandomPredicate() throws Exception {
+        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
+        Employee limit = generateData();
+        limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
+        limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
+        boolean isUP = rand.nextBoolean();
+        return LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
     }
     
-    private void testIteration(Function<Stream<Employee>, Function<Predicate<Employee>, Function<ParallelType, Consumer<Boolean>>>> otherDeclarationAndAssert, boolean withPredicate, boolean withDataStream) throws Exception {
+    private void testIteration(Function<Stream<Employee>, Function<Collection<Employee>, Function<Predicate<Employee>, Function<ParallelType, Consumer<Boolean>>>>> otherDeclarationAndAssert
+            , boolean withPredicate
+            , boolean withDataStream
+            , boolean verifyMatchForAll) throws Exception {
         Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
         while (iter.hasNext()) {
             ParallelType type = iter.next();
@@ -355,10 +360,10 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             boolean verifyMatch = false;
             if (withDataStream) {
                 //else c1 is null
-                verifyMatch(c1, limit, isUP, true, rule);
+                verifyMatch = verifyMatch(c1, limit, isUP, verifyMatchForAll, rule);
             }
 
-            otherDeclarationAndAssert.apply(stream).apply(p).apply(type).accept(verifyMatch);
+            otherDeclarationAndAssert.apply(stream).apply(c1).apply(p).apply(type).accept(verifyMatch);
 
         }
     }
@@ -367,206 +372,199 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
     @SuppressWarnings("unchecked")
     public void testAllMatch() throws Exception {
         testIteration(
-                stream -> p -> type -> verifyMatch -> {
-                    assertEquals(stream.allMatch(p), (boolean) verifyMatch);
-                }, true, true);
-
+        stream -> c -> p -> type -> verifyMatch -> {
+        assertEquals(stream.allMatch(p), (boolean) verifyMatch);
+        }, true, true, true);
+        
         testIteration(
-                stream -> p -> type -> verifyMatch -> {
-                    try {
-                        // Empty stream's allMatch will return true always
-                        @SuppressWarnings("cast")
-                        Collection<Employee> emptyCol = hasIni
-                                ? (Collection<Employee>) LambdaUtilities.create(typeObject, initSize)
-                                : (Collection<Employee>) LambdaUtilities.create(typeObject);
-                        Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                                : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
-                        assertTrue(stream2.allMatch(p));
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }, true, false);
+        stream -> c -> p -> type -> verifyMatch -> {
+        try {
+        // Empty stream's allMatch will return true always
+        @SuppressWarnings("cast")
+        Collection<Employee> emptyCol = hasIni
+        ? (Collection<Employee>) LambdaUtilities.create(typeObject, initSize)
+        : (Collection<Employee>) LambdaUtilities.create(typeObject);
+        Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
+        : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
+        assertTrue(stream2.allMatch(p));
+        } catch (Exception e) {
+        throw new RuntimeException(e);
+        }
+        }, true, false, true);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testAnyMatch() throws Exception {
-        Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<Employee> c1 = generateData(DATA_SIZE);
-            Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-            Employee limit = generateData();
-            limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
-            limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
-            boolean isUP = rand.nextBoolean();
-            Stream<Employee> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.stream().sequential() : c1.stream();
-            assertEquals(stream1.anyMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())),
-                    verifyMatch(c1, limit, isUP, false, rule));
-
-            // Empty stream's anyMatch, noneMatch will return false always
-            @SuppressWarnings("cast")
-                    Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                            .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
-            Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
-            assertTrue(!stream2.anyMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())));
+       
+        testIteration(
+        stream -> c -> p -> type -> verifyMatch -> {
+        assertEquals(stream.anyMatch(p), (boolean) verifyMatch);
         }
+        , true
+        , true
+        , false
+        );
+       
+        testIteration(
+        stream -> c -> p -> type -> verifyMatch -> {
+        try {
+        // Empty stream's anyMatch, noneMatch will return false always
+        @SuppressWarnings("cast")
+        Collection<Employee> emptyCol = getEmptyCollection();
+        Stream<Employee> stream2 = getStreamFromCollection(emptyCol, type);
+        assertTrue(!stream2.anyMatch(p));
+        } catch (Exception ex) {
+        throw new RuntimeException(ex);
+        }
+        }, true, false, false);       
     }
 
+    private Stream<Employee> getStreamFromCollection(Collection<Employee> l, ParallelType typeVar) {
+        return (typeVar == ParallelType.Parallel) ? l.parallelStream()
+                                : (typeVar == ParallelType.Sequential) ? l.stream().sequential() : l.stream();
+    }
+    
+    private Collection<Employee> getEmptyCollection() throws Exception {
+        return hasIni ? LambdaUtilities.create(typeObject, initSize) : LambdaUtilities.create(typeObject);
+    }
+
+    
     @Test
     @SuppressWarnings("unchecked")
     public void testConcat() throws Exception {
-        Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<Employee> l1 = generateData(DATA_SIZE);
-            Collection<Employee> l2 = generateData(DATA_SIZE);
-            Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-            Employee limit = generateData();
-            limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
-            limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
-            boolean isUP = rand.nextBoolean();
-            Predicate<Employee> p = LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
+        testIteration(
+                stream -> c -> predicate -> type -> verifyMatch -> {
+                    try {
+                        Collection<Employee> l1 = generateData(DATA_SIZE);
+                        Collection<Employee> l2 = generateData(DATA_SIZE);
+                        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
+                        Employee limit = generateData();
+                        limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
+                        limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
+                        boolean isUP = rand.nextBoolean();
+                        Predicate<Employee> p = LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
 
-            Stream<Employee> stream11 = (type == ParallelType.Parallel) ? l1.parallelStream()
-                    : (type == ParallelType.Sequential) ? l1.stream().sequential() : l1.stream();
-            Stream<Employee> stream21 = (type == ParallelType.Parallel) ? l2.parallelStream()
-                    : (type == ParallelType.Sequential) ? l2.stream().sequential() : l2.stream();
+                        Stream<Employee> stream11 = getStreamFromCollection(l1, type);
+                        Stream<Employee> stream21 = getStreamFromCollection(l2, type);
 
-            Collection<Employee> result1 = stream11.filter(p).collect(Collectors.toCollection(LinkedList<Employee>::new));
-            Collection<Employee> result2 = stream21.filter(p).collect(Collectors.toCollection(LinkedList<Employee>::new));
-            result1.addAll(result2);
+                        Collection<Employee> result1 = stream11.filter(p).collect(Collectors.toCollection(LinkedList<Employee>::new));
+                        Collection<Employee> result2 = stream21.filter(p).collect(Collectors.toCollection(LinkedList<Employee>::new));
+                        result1.addAll(result2);
 
-            Stream<Employee> stream12 = (type == ParallelType.Parallel) ? l1.parallelStream()
-                    : (type == ParallelType.Sequential) ? l1.stream().sequential() : l1.stream();
-            Stream<Employee> stream22 = (type == ParallelType.Parallel) ? l2.parallelStream()
-                    : (type == ParallelType.Sequential) ? l2.stream().sequential() : l2.stream();
-            List<Employee> expectedList = Stream.concat(stream12, stream22).filter(p).collect(Collectors.<Employee>toList());
-            List<Employee> testList = result1.stream().collect(Collectors.<Employee>toList());
-            //Can't sort on unmodifiable list
-            if (expectedList.size() > 1) {
-                Collections.sort(testList, rule.getComparator());
-                Collections.sort(expectedList, rule.getComparator());
-            }
-            for (int i = 0; i < testList.size(); i++) {
-                assertEquals(rule.getValue(testList.get(i)), rule.getValue(expectedList.get(i)));
-            }
+                        Stream<Employee> stream12 = getStreamFromCollection(l1, type);
+                        Stream<Employee> stream22 = getStreamFromCollection(l2, type);
+                        List<Employee> expectedList = Stream.concat(stream12, stream22).filter(p).collect(Collectors.<Employee>toList());
+                        List<Employee> testList = result1.stream().collect(Collectors.<Employee>toList());
+                        //Can't sort on unmodifiable list
+                        if (expectedList.size() > 1) {
+                            Collections.sort(testList, rule.getComparator());
+                            Collections.sort(expectedList, rule.getComparator());
+                        }
+                        for (int i = 0; i < testList.size(); i++) {
+                            assertEquals(rule.getValue(testList.get(i)), rule.getValue(expectedList.get(i)));
+                        }
 
-            //Concat with empty stream should not change other input
-            Collection<Employee> emptyList = hasIni ? LambdaUtilities.create(typeObject, initSize) : LambdaUtilities
-                    .create(typeObject);
-            Stream<Employee> stream3 = (type == ParallelType.Parallel) ? emptyList.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyList.stream().sequential() : emptyList.stream();
+                        //Concat with empty stream should not change other input
+                        Collection<Employee> emptyList = getEmptyCollection();
+                        Stream<Employee> stream3 = getStreamFromCollection(emptyList, type);
 
-            List<Employee> result3 = Stream.concat(l1.stream(), stream3).collect(Collectors.<Employee>toList());
-            List<Employee> list1 = new ArrayList<>(l1);
-            //Can't sort on unmodifiable list
-            if (result3.size() > 1) {
-                Collections.sort(list1, rule.getComparator());
-                Collections.sort(result3, rule.getComparator());
-            }
-            assertEquals(list1, result3);
-        }
+                        List<Employee> result3 = Stream.concat(l1.stream(), stream3).collect(Collectors.<Employee>toList());
+                        List<Employee> list1 = new ArrayList<>(l1);
+                        //Can't sort on unmodifiable list
+                        if (result3.size() > 1) {
+                            Collections.sort(list1, rule.getComparator());
+                            Collections.sort(result3, rule.getComparator());
+                        }
+                        assertEquals(list1, result3);
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }, false, false, true);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testFilter() throws Exception {
-        Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<Employee> l = generateData(DATA_SIZE);
-            Stream<Employee> stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential() : l.stream());
-            // Create predicate with random limit and random up/down size            
-            Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-            Employee limit1 = generateData();
-            limit1.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
-            limit1.setAge(rand.nextInt(Employee.MAX_AGE * 2));
-            boolean isUP1 = rand.nextBoolean();
-            Predicate<Employee> p1 = LambdaUtilities.randomGenericPredicate(isUP1, limit1, rule.getComparator());
-
+        // Create predicate with random limit and random up/down size            
+        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
+        Employee limit1 = generateData();
+        limit1.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
+        limit1.setAge(rand.nextInt(Employee.MAX_AGE * 2));
+        boolean isUP1 = rand.nextBoolean();
+        Predicate<Employee> p1 = LambdaUtilities.randomGenericPredicate(isUP1, limit1, rule.getComparator());
+        
+        testIteration(stream -> c -> predicate -> type -> verifyMatch -> {
             // Filter the data, check if it works as expected.
             Collection<Employee> result1 = stream.filter(p1).collect(Collectors.toCollection(LinkedList<Employee>::new));
             assertTrue(verifyMatch(result1, limit1, isUP1, true, rule));
-
+        }, false, true, true);
+        
+        testIteration(stream -> c -> predicate -> type -> verifyMatch -> {
             // filter on parallel stream can cause IllegalStateException
-            stream = (type == ParallelType.Parallel) ? l.parallelStream() : ((type == ParallelType.Sequential) ? l
-                    .stream().sequential() : l.stream());
-            result1.clear();
-            result1 = stream.filter(p1).collect(Collectors.toCollection(LinkedList<Employee>::new));
-            assertTrue(verifyMatch(result1, limit1, isUP1, true, rule));
-
-            // filter with Predicates.alwaysFlase() will get nothing
-            stream = (type == ParallelType.Parallel) ? l.parallelStream() : ((type == ParallelType.Sequential) ? l
-                    .stream().sequential() : l.stream());
-            result1.clear();
-
-            result1 = stream.filter(p1).filter(e -> false).collect(Collectors.toCollection(LinkedList<Employee>::new));
+            Collection<Employee> result1 = stream.filter(p1).filter(e -> false).collect(Collectors.toCollection(LinkedList<Employee>::new));
             assertTrue(result1.isEmpty());
-            
-            // Create another predicates with random limit and random up/down size 
-            Employee limit2 = generateData();
-            limit2.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
-            limit2.setAge(rand.nextInt(Employee.MAX_AGE * 2));
-            boolean isUP2 = rand.nextBoolean();
-            Predicate<Employee> p2 = LambdaUtilities.randomGenericPredicate(isUP2, limit2, rule.getComparator());
+        }, false, true, true);            
 
+        testIteration(unusedStream -> c -> predicate -> type -> verifyMatch -> {
+            try {
+            Supplier<Stream<Employee>> refreshStream = () -> getStreamFromCollection(c, type);
+            
+            Stream<Employee> stream;
+           
             // Testing of filtering on conjunction of predicates
-            stream = (type == ParallelType.Parallel) ? l.parallelStream() : ((type == ParallelType.Sequential) ? l
-                    .stream().sequential() : l.stream());
-            List<Employee> result2 = stream.filter(p1).filter(p2).collect(Collectors.toCollection(ArrayList<Employee>::new));
-            stream = (type == ParallelType.Parallel) ? l.parallelStream() : ((type == ParallelType.Sequential) ? l
-                    .stream().sequential() : l.stream());
-            List<Employee> result3 = stream.filter(p1.and(p2)).collect(Collectors.toCollection(ArrayList<Employee>::new));
+            stream  = refreshStream.get();
+            List<Employee> result2 = stream.filter(p1).filter(predicate).collect(Collectors.toCollection(ArrayList<Employee>::new));
+            stream = refreshStream.get();
+            List<Employee> result3 = stream.filter(p1.and(predicate)).collect(Collectors.toCollection(ArrayList<Employee>::new));
             Collections.sort(result2, rule.getComparator());
             Collections.sort(result3, rule.getComparator());
             assertEquals(result2, result3);
-
+          
             //result2 could be a EmptyList, we're putting result2, result3 into
             // concatList because EmptyList doesn't support addAll
             List<Employee> concatList = new ArrayList<>();
-            stream = (type == ParallelType.Parallel) ? l.parallelStream() : ((type == ParallelType.Sequential) ? l
-                    .stream().sequential() : l.stream());
-            result2 = stream.filter(p1.and(p2)).collect(Collectors.toCollection(ArrayList<Employee>::new));
-            stream = (type == ParallelType.Parallel) ? l.parallelStream() : ((type == ParallelType.Sequential) ? l
-                    .stream().sequential() : l.stream());
-            result3 = stream.filter(p1.or(p2)).collect(Collectors.toCollection(ArrayList<Employee>::new));
+            stream = refreshStream.get();
+            result2 = stream.filter(p1.and(predicate)).collect(Collectors.toCollection(ArrayList<Employee>::new));
+            stream = refreshStream.get();
+            result3 = stream.filter(p1.or(predicate)).collect(Collectors.toCollection(ArrayList<Employee>::new));
 
             concatList.addAll(result2);
             concatList.addAll(result3);
             result3.clear();
-            stream = (type == ParallelType.Parallel) ? l.parallelStream() : ((type == ParallelType.Sequential) ? l
-                    .stream().sequential() : l.stream());
-            Stream<Employee> stream2 = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential() : l.stream());
-            result3 = Stream.concat(stream.filter(p1), stream2.filter(p2)).collect(Collectors.toCollection(ArrayList<Employee>::new));
+            Stream<Employee> stream1 = refreshStream.get();
+            Stream<Employee> stream2 = refreshStream.get();
+            result3 = Stream.concat(stream1.filter(p1), stream2.filter(predicate)).collect(Collectors.toCollection(ArrayList<Employee>::new));
             Collections.sort(concatList, rule.getComparator());
             Collections.sort(result3, rule.getComparator());
             assertEquals(concatList, result3);
+            } catch(Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }, true, true, true);            
 
+        testIteration(stream -> c -> predicate -> type -> verifyMatch -> {  
+            try {
+            //filtering result of empty stream should be empty
             @SuppressWarnings("cast")
-                    Collection<Employee> emptyList = hasIni ? (Collection<Employee>) LambdaUtilities.create(typeObject,
-                            initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
-            Stream<Employee> stream3 = (type == ParallelType.Parallel) ? emptyList.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyList.stream().sequential() : emptyList.stream();
+                    Collection<Employee> emptyList = getEmptyCollection();
+            Stream<Employee> stream3 = getStreamFromCollection(emptyList, type);
             assertFalse(stream3.filter(p1).iterator().hasNext());
-        }
+            } catch(Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }, false, false, true);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    public void testFind() throws Exception {
+    public void testFind() throws Exception {        
         Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
         while (iter.hasNext()) {
             ParallelType type = iter.next();
             Collection<Employee> c = generateData(DATA_SIZE);
-            Stream<Employee> stream1 = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential() : c.stream();
-            Stream<Employee> stream2 = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential() : c.stream();
+            Stream<Employee> stream1 = getStreamFromCollection(c, type);
+            Stream<Employee> stream2 = getStreamFromCollection(c, type);
             java.util.Optional<Employee> opAny = stream1.findAny();
             java.util.Optional<Employee> opFirst = stream2.findFirst();
             assertTrue(opAny.isPresent());
@@ -576,59 +574,43 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             }
 
             @SuppressWarnings("cast")
-                    Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                            .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
-            Stream<Employee> emptyStream1 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
+            Collection<Employee> emptyCol = getEmptyCollection();
+            Stream<Employee> emptyStream1 = getStreamFromCollection(emptyCol, type);
             java.util.Optional<Employee> emptyAny = emptyStream1.findAny();
             assertFalse(emptyAny.isPresent());
-            Stream<Employee> emptyStream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
-            java.util.Optional<Employee> emptyFirsty = emptyStream2.findFirst();
-            assertFalse(emptyFirsty.isPresent());
+            
+            Stream<Employee> emptyStream2 = getStreamFromCollection(emptyCol, type);
+            java.util.Optional<Employee> emptyFirst = emptyStream2.findFirst();
+            assertFalse(emptyFirst.isPresent());
         }
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testForEach() throws Exception {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<Employee> c = generateData(DATA_SIZE);
-            Stream<Employee> stream = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential()
-                    : c.stream();
-            stream.forEach(t -> {
-                assertTrue(c.contains(t));
+        testIteration(stream -> collection -> p -> type -> verify -> {
+                    stream.forEach(t -> {
+                assertTrue(collection.contains(t));
             });
-        }
+        }, true, true, false);
     }
 
     @Test
     public void testGroupBy() throws Throwable {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
+        Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
         while (iter.hasNext()) {
             ParallelType type = iter.next();
             Collection<Employee> c = generateData(DATA_SIZE);
 
-            Stream<Employee> stream = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential()
-                    : c.stream();
+            Stream<Employee> stream = getStreamFromCollection(c, type);
             Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
             Map<Object, List<Employee>> result
                     = stream.collect(Collectors.groupingBy(employeeGenericFunction(rule)));
             verifyGroupBy(result, c, rule);
 
             @SuppressWarnings("cast")
-                    Collection<Employee> emptyList = hasIni
-                    ? (Collection<Employee>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<Employee>) LambdaUtilities.create(typeObject);
-            Stream<Employee> emptyStream = (type == ParallelType.Parallel) ? emptyList.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyList.stream().sequential()
-                    : emptyList.stream();
+                    Collection<Employee> emptyList = getEmptyCollection();
+            Stream<Employee> emptyStream = getStreamFromCollection(emptyList, type);
             assertTrue(emptyStream.collect(Collectors.groupingBy(employeeGenericFunction(rule))).isEmpty());
         }
     }
@@ -642,12 +624,10 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
             Collection<Employee> col = generateData(10);
             int limit = rand.nextInt(10 * 2);
             Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-            Stream<Employee> stream1 = (type == ParallelType.Parallel) ? col.parallelStream()
-                    : (type == ParallelType.Sequential) ? col.stream().sequential() : col.stream();
+            Stream<Employee> stream1 = getStreamFromCollection(col, type);
             List<Employee> result1 = stream1.flatMap(genEmployeeFlatMapper(2, rule)).collect(Collectors.<Employee>toList());
 
-            Stream<Employee> stream2 = (type == ParallelType.Parallel) ? col.parallelStream()
-                    : (type == ParallelType.Sequential) ? col.stream().sequential() : col.stream();
+            Stream<Employee> stream2 = getStreamFromCollection(col, type);
             List<Employee> result2 = stream2.flatMap(genEmployeeFlatMapper(2, rule)).limit(limit)
                     .collect(Collectors.<Employee>toList());
 
@@ -666,24 +646,22 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         Comparator<Employee> c1 = rule.getComparator();
 
         for (Comparator<Employee> c : new Comparator[]{c1, c1.reversed()}) {
+            
+            testIteration(stream -> collection -> p -> type -> verify -> {
+                java.util.Optional<Employee> optional = stream.max(c);
+                assertTrue(optional.isPresent());
+                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax1(collection, c)));
+                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax2(collection, c)));
+                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax3(collection, c)));
+            }, true, true, false);
+            
             Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
             while (iter.hasNext()) {
-
                 ParallelType type = iter.next();
-                Collection<Employee> col = generateData(DATA_SIZE);
-                Stream<Employee> stream1 = (type == ParallelType.Parallel) ? col.parallelStream()
-                        : (type == ParallelType.Sequential) ? col.stream().sequential() : col.stream();
-                java.util.Optional<Employee> optional = stream1.max(c);
-                assertTrue(optional.isPresent());
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax1(col, c)));
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax2(col, c)));
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax3(col, c)));
-
+                
                 @SuppressWarnings("cast")
-                        Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                                .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
-                Stream<Employee> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                        : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
+                        Collection<Employee> emptyCol = getEmptyCollection();
+                Stream<Employee> emptyStream = getStreamFromCollection(emptyCol, type);
                 assertFalse(emptyStream.max(c).isPresent());
             }
         }
@@ -696,19 +674,19 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
         Comparator<Employee> c1 = rule.getComparator();
 
         for (Comparator<Employee> c : new Comparator[]{c1, c1.reversed()}) {
+
+            testIteration(stream -> collection -> p -> type -> verify -> {
+                java.util.Optional<Employee> optional = stream.min(c);
+                assertTrue(optional.isPresent());
+                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin1(collection, c)));
+                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin2(collection, c)));
+                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin3(collection, c)));
+            }, true, true, false);
+
             Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
             while (iter.hasNext()) {
-
                 ParallelType type = iter.next();
-                Collection<Employee> col = generateData(DATA_SIZE);
-                Stream<Employee> stream1 = (type == ParallelType.Parallel) ? col.parallelStream()
-                        : (type == ParallelType.Sequential) ? col.stream().sequential() : col.stream();
-                java.util.Optional<Employee> optional = stream1.min(c);
-                assertTrue(optional.isPresent());
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin1(col, c)));
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin2(col, c)));
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin3(col, c)));
-
+                
                 @SuppressWarnings("cast")
                         Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
                                 .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
@@ -722,26 +700,28 @@ public class EmployeeStreamTest<T extends Collection<Employee>> implements ITest
     @Test
     @SuppressWarnings("unchecked")
     public void testNoneMatch() throws Exception {
+        testIteration(stream -> c -> p -> type -> verifyMatch -> {
+            assertEquals(stream.noneMatch(p), !verifyMatch);            
+        }, true, true, true);
+        
         Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
         while (iter.hasNext()) {
             ParallelType type = iter.next();
-            Collection<Employee> c1 = generateData(DATA_SIZE);
+            //Collection<Employee> c1 = generateData(DATA_SIZE);
             Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
             Employee limit = generateData();
             limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
             limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
             boolean isUP = rand.nextBoolean();
-            Stream<Employee> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.stream().sequential() : c1.stream();
-            assertEquals(stream1.noneMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())),
-                    verifyMatch(c1, limit, !isUP, true, rule));
+            //Stream<Employee> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
+            //        : (type == ParallelType.Sequential) ? c1.stream().sequential() : c1.stream();
+            //assertEquals(stream1.noneMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())),
+            //        verifyMatch(c1, limit, !isUP, true, rule));
 
             // Empty stream's noneMatch will return true always
             @SuppressWarnings("cast")
-                    Collection<Employee> emptyCol = hasIni ? (Collection<Employee>) LambdaUtilities
-                            .create(typeObject, initSize) : (Collection<Employee>) LambdaUtilities.create(typeObject);
-            Stream<Employee> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
+                    Collection<Employee> emptyCol = getEmptyCollection();
+            Stream<Employee> stream2 = getStreamFromCollection(emptyCol, type);
             assertTrue(stream2.noneMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())));
         }
     }
