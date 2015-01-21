@@ -58,6 +58,7 @@ import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.testng.Assert;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -308,7 +309,8 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
         return typeObject.getName() + "<Employee>";
     }
 
-    private Predicate<Employee> getRandomPredicate() throws Exception {
+    @Override
+    protected Predicate<Employee> getRandomPredicate() throws Exception {
         Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
         Employee limit = generateData();
         limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
@@ -317,14 +319,13 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
         return LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
     }
 
-    private void testIteration(Function<Stream<Employee>, Function<Collection<Employee>, Function<Predicate<Employee>, Function<ParallelType, Consumer<Boolean>>>>> otherDeclarationAndAssert, boolean withPredicate, boolean withDataStream, boolean verifyMatchForAll) throws Exception {
+    @Override
+    protected void singleStreamVerifyPredicateTest(Function<Stream<Employee>, Function<Predicate<Employee>, Consumer<Boolean>>> otherDeclarationAndAssert, boolean verifyMatchForAll) throws Exception {
 
         simpleTestIteration(collection -> type -> {
             try {
-                Stream<Employee> stream = null;
-                if (withDataStream) {
-                    stream = getStreamFromCollection(collection, type);
-                }
+                Stream<Employee> stream = getStreamFromCollection(collection, type);
+
 
                 Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
                 Employee limit = generateData();
@@ -332,18 +333,13 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
                 limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
                 boolean isUP = rand.nextBoolean();
 
-                Predicate<Employee> p = null;
-                if (withPredicate) {
-                    p = LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
-                }
+                Predicate<Employee> p =  LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
 
-                boolean verifyMatch = false;
-                if (withDataStream) {
-                    //else c1 is null
-                    verifyMatch = verifyMatch(collection, limit, isUP, verifyMatchForAll, rule);
-                }
 
-                otherDeclarationAndAssert.apply(stream).apply(collection).apply(p).apply(type).accept(verifyMatch);
+                boolean verifyMatch = verifyMatch(collection, limit, isUP, verifyMatchForAll, rule);
+
+
+                otherDeclarationAndAssert.apply(stream).apply(p).accept(verifyMatch);
             } catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
@@ -353,95 +349,30 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
     @Test
     @SuppressWarnings("unchecked")
     public void testAllMatch() throws Exception {
-        testIteration(
-                stream -> c -> p -> type -> verifyMatch -> {
-                    assertEquals(stream.allMatch(p), (boolean) verifyMatch);
-                }, true, true, true);
-
-        emptyStreamTestIteration(stream -> {
-            try {
-                // Empty stream's allMatch will return true always
-                Predicate<Employee> p = getRandomPredicate();
-                assertTrue(stream.allMatch(p));
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        });
+        super.testAllMatch();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testAnyMatch() throws Exception {
-
-        testIteration(
-                stream -> c -> p -> type -> verifyMatch -> {
-                    assertEquals(stream.anyMatch(p), (boolean) verifyMatch);
-                }, true, true, false
-        );
-
-        emptyStreamTestIteration(
-                stream -> {
-                    try {
-                        Predicate<Employee> p = getRandomPredicate();
-                        // Empty stream's anyMatch, noneMatch will return false always
-                        assertTrue(!stream.anyMatch(p));
-                    } catch (Exception ex) {
-                        throw new RuntimeException(ex);
-                    }
-                });
+        super.testAnyMatch();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testConcat() throws Exception {
-        simpleTestIteration(
-                c -> type -> {
-                    try {
-                        Collection<Employee> l1 = generateData(DATA_SIZE);
-                        Collection<Employee> l2 = generateData(DATA_SIZE);
-                        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-                        Employee limit = generateData();
-                        limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
-                        limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
-                        boolean isUP = rand.nextBoolean();
-                        Predicate<Employee> p = LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
-
-                        Stream<Employee> stream11 = getStreamFromCollection(l1, type);
-                        Stream<Employee> stream21 = getStreamFromCollection(l2, type);
-
-                        Collection<Employee> result1 = stream11.filter(p).collect(Collectors.toCollection(LinkedList<Employee>::new));
-                        Collection<Employee> result2 = stream21.filter(p).collect(Collectors.toCollection(LinkedList<Employee>::new));
-                        result1.addAll(result2);
-
-                        Stream<Employee> stream12 = getStreamFromCollection(l1, type);
-                        Stream<Employee> stream22 = getStreamFromCollection(l2, type);
-                        List<Employee> expectedList = Stream.concat(stream12, stream22).filter(p).collect(Collectors.<Employee>toList());
-                        List<Employee> testList = result1.stream().collect(Collectors.<Employee>toList());
-                        //Can't sort on unmodifiable list
-                        if (expectedList.size() > 1) {
-                            Collections.sort(testList, rule.getComparator());
-                            Collections.sort(expectedList, rule.getComparator());
-                        }
-                        for (int i = 0; i < testList.size(); i++) {
-                            assertEquals(rule.getValue(testList.get(i)), rule.getValue(expectedList.get(i)));
-                        }
-
-                        //Concat with empty stream should not change other input
-                        Collection<Employee> emptyList = getEmptyCollection();
-                        Stream<Employee> stream3 = getStreamFromCollection(emptyList, type);
-
-                        List<Employee> result3 = Stream.concat(l1.stream(), stream3).collect(Collectors.<Employee>toList());
-                        List<Employee> list1 = new ArrayList<>(l1);
-                        //Can't sort on unmodifiable list
-                        if (result3.size() > 1) {
-                            Collections.sort(list1, rule.getComparator());
-                            Collections.sort(result3, rule.getComparator());
-                        }
-                        assertEquals(list1, result3);
-                    } catch (Exception ex) {
-                        throw new RuntimeException(ex);
-                    }
-                });
+        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
+        Employee limit = generateData();
+        limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
+        limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
+        boolean isUP = rand.nextBoolean();
+        
+        Comparator<Employee> comparator = rule.getComparator();
+        Predicate<Employee> p = LambdaUtilities.randomGenericPredicate(isUP, limit, comparator);
+        
+        super.testConcat(p, comparator, i -> (testList, expectedList) -> {
+            assertEquals(rule.getValue(testList.get(i)), rule.getValue(expectedList.get(i)));
+        });
     }
 
     @Test
@@ -454,99 +385,24 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
         limit1.setAge(rand.nextInt(Employee.MAX_AGE * 2));
         boolean isUP1 = rand.nextBoolean();
         Predicate<Employee> p1 = LambdaUtilities.randomGenericPredicate(isUP1, limit1, rule.getComparator());
+        
+        Comparator<Employee> comparator = rule.getComparator();
 
-        testIteration(stream -> c -> predicate -> type -> verifyMatch -> {
-            // Filter the data, check if it works as expected.
-            Collection<Employee> result1 = stream.filter(p1).collect(Collectors.toCollection(LinkedList<Employee>::new));
-            assertTrue(verifyMatch(result1, limit1, isUP1, true, rule));
-        }, false, true, true);
-
-        testIteration(stream -> c -> predicate -> type -> verifyMatch -> {
-            // filter on parallel stream can cause IllegalStateException
-            Collection<Employee> result1 = stream.filter(p1).filter(e -> false).collect(Collectors.toCollection(LinkedList<Employee>::new));
-            assertTrue(result1.isEmpty());
-        }, false, true, true);
-
-        simpleTestIteration(c -> type -> {
-            try {
-                Predicate<Employee> predicate = getRandomPredicate();
-
-                Supplier<Stream<Employee>> refreshStream = () -> getStreamFromCollection(c, type);
-
-                Stream<Employee> stream;
-
-                // Testing of filtering on conjunction of predicates
-                stream = refreshStream.get();
-                List<Employee> result2 = stream.filter(p1).filter(predicate).collect(Collectors.toCollection(ArrayList<Employee>::new));
-                stream = refreshStream.get();
-                List<Employee> result3 = stream.filter(p1.and(predicate)).collect(Collectors.toCollection(ArrayList<Employee>::new));
-                Collections.sort(result2, rule.getComparator());
-                Collections.sort(result3, rule.getComparator());
-                assertEquals(result2, result3);
-
-                //result2 could be a EmptyList, we're putting result2, result3 into
-                // concatList because EmptyList doesn't support addAll
-                List<Employee> concatList = new ArrayList<>();
-                stream = refreshStream.get();
-                result2 = stream.filter(p1.and(predicate)).collect(Collectors.toCollection(ArrayList<Employee>::new));
-                stream = refreshStream.get();
-                result3 = stream.filter(p1.or(predicate)).collect(Collectors.toCollection(ArrayList<Employee>::new));
-
-                concatList.addAll(result2);
-                concatList.addAll(result3);
-                result3.clear();
-                Stream<Employee> stream1 = refreshStream.get();
-                Stream<Employee> stream2 = refreshStream.get();
-                result3 = Stream.concat(stream1.filter(p1), stream2.filter(predicate)).collect(Collectors.toCollection(ArrayList<Employee>::new));
-                Collections.sort(concatList, rule.getComparator());
-                Collections.sort(result3, rule.getComparator());
-                assertEquals(concatList, result3);
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        });
-
-        emptyStreamTestIteration(stream -> {
-            //filtering result of empty stream should be empty
-            assertFalse(stream.filter(p1).iterator().hasNext());
-        });
+        super.testFilter(p1, comparator, result1 -> assertTrue(verifyMatch(result1, limit1, isUP1, true, rule)));
     }
 
     @Test
     @SuppressWarnings("unchecked")
+    @Override
     public void testFind() throws Exception {
-        simpleTestIteration(c -> type -> {
-            Stream<Employee> stream1 = getStreamFromCollection(c, type);
-            Stream<Employee> stream2 = getStreamFromCollection(c, type);
-            java.util.Optional<Employee> opAny = stream1.findAny();
-            java.util.Optional<Employee> opFirst = stream2.findFirst();
-            assertTrue(opAny.isPresent());
-            assertTrue(opFirst.isPresent());
-            if (!stream1.isParallel()) {
-                assertEquals(opAny, opFirst);
-
-            }
-        });
-
-        emptyStreamTestIteration(stream -> {
-            java.util.Optional<Employee> emptyAny = stream.findAny();
-            assertFalse(emptyAny.isPresent());
-        });
-
-        emptyStreamTestIteration(stream -> {
-            java.util.Optional<Employee> emptyFirst = stream.findFirst();
-            assertFalse(emptyFirst.isPresent());
-        });
+        super.testFind();
     }
 
     @Test
     @SuppressWarnings("unchecked")
+    @Override
     public void testForEach() throws Exception {
-        testIteration(stream -> collection -> p -> type -> verify -> {
-            stream.forEach(t -> {
-                assertTrue(collection.contains(t));
-            });
-        }, true, true, false);
+        super.testForEach();
     }
 
     @Test
@@ -598,13 +454,13 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
 
         for (Comparator<Employee> c : new Comparator[]{c1, c1.reversed()}) {
 
-            testIteration(stream -> collection -> p -> type -> verify -> {
+            singleStreamTestIteration(stream -> collection -> {
                 java.util.Optional<Employee> optional = stream.max(c);
                 assertTrue(optional.isPresent());
                 assertEquals(rule.getValue(optional.get()), rule.getValue(getMax1(collection, c)));
                 assertEquals(rule.getValue(optional.get()), rule.getValue(getMax2(collection, c)));
                 assertEquals(rule.getValue(optional.get()), rule.getValue(getMax3(collection, c)));
-            }, true, true, false);
+            });
 
             emptyStreamTestIteration(stream -> {
                 assertFalse(stream.max(c).isPresent());
@@ -620,13 +476,13 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
 
         for (Comparator<Employee> c : new Comparator[]{c1, c1.reversed()}) {
 
-            testIteration(stream -> collection -> p -> type -> verify -> {
+            singleStreamTestIteration(stream -> collection -> {
                 java.util.Optional<Employee> optional = stream.min(c);
                 assertTrue(optional.isPresent());
                 assertEquals(rule.getValue(optional.get()), rule.getValue(getMin1(collection, c)));
                 assertEquals(rule.getValue(optional.get()), rule.getValue(getMin2(collection, c)));
                 assertEquals(rule.getValue(optional.get()), rule.getValue(getMin3(collection, c)));
-            }, true, true, false);
+            });
 
             emptyStreamTestIteration(stream -> {
                 assertFalse(stream.min(c).isPresent());
@@ -671,25 +527,25 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
                 ? bf.apply(0, col.size() - skip)
                 : rand.nextInt(Integer.MAX_VALUE);
 
-        testIteration(stream -> c -> p -> type -> verifyMatch -> {
+        singleStreamTestIteration(stream -> c -> {
             int skip = randomSkip.applyAsInt(c);
             int limit = randomLimit.apply(c, skip);
 
             Iterator<Employee> it = stream.skip(skip).limit(limit).iterator();
             verifySlice(c.iterator(), it, skip, limit);
-        }, false, true, true);
+        });
 
-        testIteration(stream -> c -> p -> type -> verifyMatch -> {
+        singleStreamTestIteration(stream -> c -> {
             int skip = randomSkip.applyAsInt(c);
             //limit=0 causes empty stream
             assertFalse(stream.skip(skip).limit(0).iterator().hasNext());
-        }, false, true, true);
+        });
 
-        testIteration(stream -> c -> p -> type -> verifyMatch -> {
+        singleStreamTestIteration(stream -> c -> {
             //skip exceed collection size cause  empty stream
             int skipExceeded = bf.apply(c.size(), Integer.MAX_VALUE);
             assertFalse(stream.skip(skipExceeded).limit(1).iterator().hasNext());
-        }, false, true, true);
+        });
 
         simpleTestIteration(c -> type -> {
             try {
@@ -708,7 +564,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
     @Test
     @SuppressWarnings("unchecked")
     public void testSorted() throws Exception {
-        testIteration(stream -> col -> p -> type -> verifyMatch -> {
+        singleStreamTestIteration(stream -> col -> {
             Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
             Comparator<Employee> c = rule.getComparator();
 
@@ -725,7 +581,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
                     assertEquals(rule.getValue(sorted.get(i)), rule.getValue(reversed.get(i)));
                 }
             }
-        }, false, true, true);
+        });
 
         emptyStreamTestIteration(stream -> {
             assertFalse(stream.sorted(Collections.reverseOrder()).iterator().hasNext());
@@ -735,14 +591,14 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
     @Test
     @SuppressWarnings("unchecked")
     public void testToArray() throws Exception {
-        testIteration(stream -> c -> p -> type -> verifyMatch -> {
+        singleStreamTestIteration(stream -> c -> {
             Object[] arr1 = stream.toArray();
             Object[] arr2 = c.toArray();
             assert (arr1.length == arr2.length);
             for (int index = 0; index < arr1.length; index++) {
                 assertEquals(arr1[index], arr2[index]);
             }
-        }, false, true, true);
+        });
 
         emptyStreamTestIteration(stream -> {
             assertEquals(stream.toArray().length, 0);
@@ -752,13 +608,13 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
     @Test
     @SuppressWarnings("unchecked")
     public void testUniqueElements() throws Exception {
-        testIteration(stream -> col -> p -> type -> verifyMatch -> {
+        singleStreamTestIteration(stream -> col -> {
             Set<Employee> set1 = new HashSet<>(col);
             Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
             List<Employee> list2 = stream.flatMap(genEmployeeFlatMapper(4, rule)).distinct().collect(Collectors.<Employee>toList());
             assertEquals(set1.size(), list2.size());
             assertTrue(set1.containsAll(list2));
-        }, false, true, true);
+        });
     }
 
     @Override

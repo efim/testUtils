@@ -35,7 +35,6 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.Stack;
@@ -56,11 +55,11 @@ import java.util.stream.Stream;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import org.testng.ITest;
 import org.testng.annotations.Factory;
 import org.testng.annotations.Test;
 import test.java.util.LambdaUtilities;
 import test.java.util.StringUtilities;
+import static test.java.util.stream.StreamTestTemplate.rand;
 
 public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extends StreamTestTemplate<StringBuilder> {
 
@@ -102,29 +101,41 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
         return result.toArray();
     }
 
-    protected static boolean verifyMatch(Collection<StringBuilder> c, LambdaUtilities.CharType charType, boolean isFirst, boolean all) {
+    protected static boolean verifyMatch(Collection<StringBuilder> c,
+            LambdaUtilities.CharType charType, boolean isFirst, boolean all) {
         Iterator<StringBuilder> it = c.iterator();
         while (it.hasNext()) {
             StringBuilder current = it.next();
             char checkChar = current.charAt(isFirst ? 0 : current.toString().length() - 1);
-            Function<Boolean, Boolean> conditional = (check) -> {
-                if (!all && check) {
-                    return true;
-                } else if (all & !check) {
-                    return false;
-                }
-                return all;
-            };
-            
             switch (charType) {
                 case DIGIT:
-                    return conditional.apply(Character.isDigit(checkChar));
+                    if (!all && Character.isDigit(checkChar)) {
+                        return true;
+                    } else if (all && !Character.isDigit(checkChar)) {
+                        return false;
+                    }
+                    break;
                 case LOWERCASE:
-                    return conditional.apply(Character.isLowerCase(checkChar));
+                    if (!all && Character.isLowerCase(checkChar)) {
+                        return true;
+                    } else if (all && !Character.isLowerCase(checkChar)) {
+                        return false;
+                    }
+                    break;
                 case UPPERCASE:
-                    return conditional.apply(Character.isUpperCase(checkChar));
+                    if (!all && Character.isUpperCase(checkChar)) {
+                        return true;
+                    } else if (all && !Character.isUpperCase(checkChar)) {
+                        return false;
+                    }
+                    break;
                 default:
-                    return conditional.apply((!Character.isLetterOrDigit(checkChar)));
+                    if (!all && !Character.isLetterOrDigit(checkChar)) {
+                        return true;
+                    } else if (all && Character.isLetterOrDigit(checkChar)) {
+                        return false;
+                    }
+                    break;
             }
         }
         return all;
@@ -142,272 +153,82 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
         return typeObject.getName() + "<StringBuilder>";
     }
 
+    @Override
+    protected Predicate<StringBuilder> getRandomPredicate() throws Exception {
+        EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
+        LambdaUtilities.CharType charType
+                = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
+        boolean isFirst = rand.nextBoolean();
+
+        return (Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst);
+    }
+
+    @Override
+    protected void singleStreamVerifyPredicateTest(Function<Stream<StringBuilder>, Function<Predicate<StringBuilder>, Consumer<Boolean>>> otherDeclarationAndAssert, boolean verifyMatchForAll) throws Exception {
+
+        simpleTestIteration(collection -> type -> {
+            try {
+                Stream<StringBuilder> stream = getStreamFromCollection(collection, type);
+
+                EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
+                LambdaUtilities.CharType charType
+                        = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
+                boolean isFirst = rand.nextBoolean();
+
+                Predicate<StringBuilder> p = (Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst);
+
+                boolean verifyMatch = verifyMatch(collection, charType, isFirst, verifyMatchForAll);
+
+                otherDeclarationAndAssert.apply(stream).apply(p).accept(verifyMatch);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     public void testAllMatch() throws Exception {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c1 = generateData(DATA_SIZE);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.parallelStream().sequential()
-                    : c1.stream();
-            EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
-            LambdaUtilities.CharType charType
-                    = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
-            boolean isFirst = rand.nextBoolean();
-            assertEquals(stream1.allMatch((Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst)),
-                    verifyMatch(c1, charType, isFirst, true));
-
-            //Empty stream's allMatch  will return true always
-            @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni
-                    ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.parallelStream().sequential()
-                    : emptyCol.stream();
-            assertTrue(stream2.allMatch((Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst)));
-        }
+        super.testAllMatch();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testAnyMatch() throws Exception {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c1 = generateData(DATA_SIZE);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.parallelStream().sequential()
-                    : c1.stream();
-            EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
-            LambdaUtilities.CharType charType
-                    = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
-            boolean isFirst = rand.nextBoolean();
-            assertEquals(stream1.anyMatch((Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst)),
-                    verifyMatch(c1, charType, isFirst, false));
-
-            //Empty stream's anyMatch  will return false always
-            @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni
-                    ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.parallelStream().sequential()
-                    : emptyCol.stream();
-            assertTrue(!stream2.anyMatch((Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst)));
-        }
+        super.testAnyMatch();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testConcat() throws Exception {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            //Concate two list's stream, then filter one predicate should be expect
-            //to be same as filter two stream repectively then concate the result.
-            Collection<StringBuilder> l1 = generateData(DATA_SIZE);
-            Collection<StringBuilder> l2 = generateData(DATA_SIZE);
-            EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
-            LambdaUtilities.CharType charType
-                    = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
-            boolean isFirst = rand.nextBoolean();
-            Predicate<StringBuilder> p = (Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst);
+        Predicate<StringBuilder> p = getRandomPredicate();
 
-            Stream<StringBuilder> stream11 = (type == ParallelType.Parallel) ? l1.parallelStream()
-                    : (type == ParallelType.Sequential) ? l1.parallelStream().sequential()
-                    : l1.stream();
-            Stream<StringBuilder> stream21 = (type == ParallelType.Parallel) ? l2.parallelStream()
-                    : (type == ParallelType.Sequential) ? l2.parallelStream().sequential()
-                    : l2.stream();
-            Collection<StringBuilder> result1 = stream11.filter(p).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
-            Collection<StringBuilder> result2 = stream21.filter(p).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
-            result1.addAll(result2);
-
-            Stream<StringBuilder> stream12 = (type == ParallelType.Parallel) ? l1.parallelStream()
-                    : (type == ParallelType.Sequential) ? l1.parallelStream().sequential()
-                    : l1.stream();
-            Stream<StringBuilder> stream22 = (type == ParallelType.Parallel) ? l2.parallelStream()
-                    : (type == ParallelType.Sequential) ? l2.parallelStream().sequential()
-                    : l2.stream();
-            List<String> expectedList = Stream.concat(stream12, stream22).filter(p).map(t -> t.toString()).collect(Collectors.<String>toList());
-            List<String> testList = result1.stream().map(t -> t.toString()).collect(Collectors.<String>toList());
-
-            Collections.sort(testList);
-            Collections.sort(expectedList);
-            assertEquals(testList, expectedList);
-
-            Collection<StringBuilder> emptyList = hasIni ? LambdaUtilities.create(typeObject, initSize)
-                    : LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream3 = (type == ParallelType.Parallel) ? emptyList.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyList.parallelStream().sequential()
-                    : emptyList.stream();
-            List<StringBuilder> result3 = Stream.concat(l1.stream(), stream3).collect(Collectors.<StringBuilder>toList());
-            List<StringBuilder> list1 = new ArrayList<StringBuilder>(l1);
-            Collections.sort(list1, NATRUAL_ORDER_CMP);
-            Collections.sort(result3, NATRUAL_ORDER_CMP);
-            assertEquals(list1, result3);
-        }
-    }
-
-    @Test
-    public void testFind() throws Throwable {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c = generateData(DATA_SIZE);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential()
-                    : c.stream();
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential()
-                    : c.stream();
-            java.util.Optional<StringBuilder> opAny = stream1.findAny();
-            java.util.Optional<StringBuilder> opFirst = stream2.findFirst();
-            assertTrue(opAny.isPresent());
-            assertTrue(opFirst.isPresent());
-            if (!stream1.isParallel()) {
-                assertEquals(opAny, opFirst);
-            }
-            @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni
-                    ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> emptyStream1 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential()
-                    : emptyCol.stream();
-            java.util.Optional<StringBuilder> emptyAny = emptyStream1.findAny();
-            assertFalse(emptyAny.isPresent());
-            Stream<StringBuilder> emptyStream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential()
-                    : emptyCol.stream();
-            java.util.Optional<StringBuilder> emptyFirsty = emptyStream2.findFirst();
-            assertFalse(emptyFirsty.isPresent());
-        }
-    }
-
-    @Test
-    public void testForEach() throws Throwable {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c = generateData(DATA_SIZE);
-            Stream<StringBuilder> stream = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.parallelStream().sequential()
-                    : c.stream();
-            stream.forEach(t -> {
-                assertTrue(c.contains(t));
-            });
-        }
+        super.testConcat(p, NATRUAL_ORDER_CMP, i -> (testList, expectedList) -> assertEquals(testList, expectedList));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testFilter() throws Exception {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            //Create predicate with random limit and random up/down size
-            Collection<StringBuilder> l = generateData(DATA_SIZE);
-            Stream<StringBuilder> stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            
-            EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
-            LambdaUtilities.CharType charType
-                    = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
-            boolean isFirst = rand.nextBoolean();
-            Predicate<StringBuilder> p1 = (Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst);
-            //Filter the data, check if it works as expected.
-            Collection<StringBuilder> result1 = stream.filter(p1).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
-            assertTrue(verifyMatch(result1, charType, isFirst, true));
-            //filter on parallel stream can cause IllegalStateException
-            stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            result1.clear();
-            result1 = stream.filter(p1).filter(e -> true).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
-            assertTrue(verifyMatch(result1, charType, isFirst, true));
+        EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
 
-            //filter with Predicates.alwaysFlase() will get nothing
-            stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            result1.clear();
-            result1 = stream.filter(p1).filter(e -> false).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
-            assertEquals(result1.size(), 0);
+        LambdaUtilities.CharType charType
+                = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
+        boolean isFirst = rand.nextBoolean();
+        Predicate<StringBuilder> p = (Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst);
 
-            EnumSet<LambdaUtilities.CharType> set2 = EnumSet.allOf(LambdaUtilities.CharType.class);
-            LambdaUtilities.CharType charType2
-                    = (LambdaUtilities.CharType) set2.toArray()[rand.nextInt(4)];
-            boolean isFirst2 = rand.nextBoolean();
-            Predicate<StringBuilder> p2 = (Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType2, isFirst2);
+        super.testFilter(p, NATRUAL_ORDER_CMP, result1 -> assertTrue(verifyMatch(result1, charType, isFirst, true)));
+    }
 
-            EnumSet<LambdaUtilities.CharType> set3 = EnumSet.allOf(LambdaUtilities.CharType.class);
-            LambdaUtilities.CharType charType3
-                    = (LambdaUtilities.CharType) set3.toArray()[rand.nextInt(4)];
-            boolean isFirst3 = rand.nextBoolean();
-            Predicate<StringBuilder> p3 = (Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType3, isFirst3);
-            //The reason conver l to sorted is CopyOnWriteArrayList doesn't support
-            //sort, we use ArrayList sort data instead
-            stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            List<StringBuilder> result2 = stream.filter(p1).filter(p2).collect(Collectors.toCollection(ArrayList<StringBuilder>::new));
-            stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            List<StringBuilder> result3 = stream.filter(p1.and(p2)).collect(Collectors.toCollection(ArrayList<StringBuilder>::new));
+    @Test
+    @Override
+    public void testFind() throws Exception {
+        super.testFind();
+    }
 
-            if (result2.isEmpty()) {
-                assertEquals(result2.size(), result3.size());
-            } else {
-                System.out.println(result2.getClass().getCanonicalName());
-                Collections.sort(result2, (sb1, sb2) -> sb1.toString().compareTo(sb2.toString()));
-                Collections.sort(result3, (sb1, sb2) -> sb1.toString().compareTo(sb2.toString()));
-                assertEquals(result2, result3);
-            }
-
-            //result2 could be a EmptyList, we're putting result2, result3 into
-            // concatList because EmptyList doesn't support addAll
-            stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            result2 = stream.filter(p1.and(p2)).collect(Collectors.toCollection(ArrayList<StringBuilder>::new));
-            stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            result3 = stream.filter(p1.or(p2)).collect(Collectors.toCollection(ArrayList<StringBuilder>::new));
-            result2.addAll(result3);
-            result3.clear();
-            stream = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? l.parallelStream()
-                    : ((type == ParallelType.Sequential) ? l.stream().sequential()
-                    : l.stream());
-            result3 = Stream.concat(stream.filter(p1), stream2.filter(p2)).collect(Collectors.toCollection(ArrayList<StringBuilder>::new));
-            Collections.sort(result2, NATRUAL_ORDER_CMP);
-            Collections.sort(result3, NATRUAL_ORDER_CMP);
-            assertEquals(result2, result3);
-
-            @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyList = hasIni
-                    ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream3 = (type == ParallelType.Parallel) ? emptyList.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyList.parallelStream().sequential()
-                    : emptyList.stream();
-            assertFalse(stream3.filter(p1).iterator().hasNext());
-        }
+    @Test
+    @Override
+    public void testForEach() throws Exception {
+        super.testForEach();
     }
 
     @Test
@@ -420,12 +241,12 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             int limit = rand.nextInt(DATA_SIZE / 10 * 2);
             Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c.parallelStream()
                     : (type == ParallelType.Sequential) ? c.stream().sequential()
-                    : c.stream();
+                            : c.stream();
             Collection<StringBuilder> result1 = stream1.flatMap(LambdaUtilities.genSBFlatMapper(2, DATA_SIZE / 10)).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
 
             Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? c.parallelStream()
                     : (type == ParallelType.Sequential) ? c.stream().sequential()
-                    : c.stream();
+                            : c.stream();
             Collection<StringBuilder> result2 = stream2.flatMap(LambdaUtilities.genSBFlatMapper(2, DATA_SIZE / 10)).limit(limit).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
 
             if (limit > result1.size()) {
@@ -446,7 +267,7 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             int selected = rand.nextInt(4);
             Stream<StringBuilder> stream = (type == ParallelType.Parallel) ? c.parallelStream()
                     : (type == ParallelType.Sequential) ? c.stream().sequential()
-                    : c.stream();
+                            : c.stream();
             List<StringBuilder> result = stream.flatMap(LambdaUtilities.genSBFlatMapper(selected, DATA_SIZE / 10)).collect(Collectors.<StringBuilder>toList());
             verifyFlatBiBlock(c, result, selected, DATA_SIZE / 10);
         }
@@ -462,7 +283,7 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
                 Collection<StringBuilder> col1 = generateData(DATA_SIZE);
                 Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? col1.parallelStream()
                         : (type == ParallelType.Sequential) ? col1.parallelStream().sequential()
-                        : col1.stream();
+                                : col1.stream();
                 java.util.Optional<StringBuilder> optional = stream1.max(comp);
                 assertTrue(optional.isPresent());
                 assertEquals(optional.get(), getMax1(col1, comp));
@@ -470,12 +291,12 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
                 assertEquals(optional.get(), getMax3(col1, comp));
 
                 @SuppressWarnings("cast")
-                        Collection<StringBuilder> emptyCol = hasIni
+                Collection<StringBuilder> emptyCol = hasIni
                         ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
                         : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
                 Stream<StringBuilder> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                         : (type == ParallelType.Sequential) ? emptyCol.stream().sequential()
-                        : emptyCol.stream();
+                                : emptyCol.stream();
                 assertFalse(emptyStream.max(comp).isPresent());
             }
         }
@@ -491,7 +312,7 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
                 Collection<StringBuilder> col1 = generateData(DATA_SIZE);
                 Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? col1.parallelStream()
                         : (type == ParallelType.Sequential) ? col1.parallelStream().sequential()
-                        : col1.stream();
+                                : col1.stream();
                 java.util.Optional<StringBuilder> optional = stream1.min(comp);
                 assertTrue(optional.isPresent());
                 assertEquals(optional.get(), getMin1(col1, comp));
@@ -499,12 +320,12 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
                 assertEquals(optional.get(), getMin3(col1, comp));
 
                 @SuppressWarnings("cast")
-                        Collection<StringBuilder> emptyCol = hasIni
+                Collection<StringBuilder> emptyCol = hasIni
                         ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
                         : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
                 Stream<StringBuilder> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                         : (type == ParallelType.Sequential) ? emptyCol.stream().sequential()
-                        : emptyCol.stream();
+                                : emptyCol.stream();
                 assertFalse(emptyStream.min(comp).isPresent());
             }
         }
@@ -520,7 +341,7 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             Collection<StringBuilder> c1 = generateData(DATA_SIZE);
             Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
                     : (type == ParallelType.Sequential) ? c1.parallelStream().sequential()
-                    : c1.stream();
+                            : c1.stream();
             EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
             LambdaUtilities.CharType charType
                     = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
@@ -530,12 +351,12 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
 
             //Empty stream's noneMatch will return true always
             @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni
+            Collection<StringBuilder> emptyCol = hasIni
                     ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
             Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.parallelStream().sequential()
-                    : emptyCol.stream();
+                            : emptyCol.stream();
             assertTrue(stream2.noneMatch((Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, !isFirst)));
         }
     }
@@ -581,8 +402,8 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             assertEquals(oiSubtract.get().toString(), subTotal.toString());
 
             @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
-                            typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
+            Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
+                    typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
             Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
             java.util.Optional<StringBuilder> emptyOp = stream2.reduce(rand.nextBoolean() ? LambdaUtilities
@@ -636,8 +457,8 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             assertEquals(subTotal.toString(), oiSub.toString());
 
             @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
-                            typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
+            Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
+                    typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
             Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
             StringBuilder emptyOp = stream2.reduce(base, rand.nextBoolean() ? LambdaUtilities.appendSBBinaryOperator()
@@ -674,8 +495,8 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             assertFalse(stream3.skip(skipExceeded).limit(1).iterator().hasNext());
 
             @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
-                            typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
+            Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
+                    typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
             Stream<StringBuilder> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
             assertFalse(emptyStream.skip(skip).limit(limit).iterator().hasNext());
@@ -691,7 +512,7 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             Collection<StringBuilder> col = generateData(DATA_SIZE);
             Stream<StringBuilder> stream = (type == ParallelType.Parallel) ? col.parallelStream()
                     : (type == ParallelType.Sequential) ? col.parallelStream().sequential()
-                    : col.stream();
+                            : col.stream();
             List<StringBuilder> reversed = stream.sorted(NATRUAL_ORDER_CMP.reversed()).collect(Collectors.<StringBuilder>toList());
             //The reason conver l to sorted is CopyOnWriteArrayList doesn't support
             //sort, we use ArrayList sort data instead
@@ -705,12 +526,12 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             assertEquals(sorted, reversed);
 
             @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni
+            Collection<StringBuilder> emptyCol = hasIni
                     ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
             Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.parallelStream().sequential()
-                    : emptyCol.stream();
+                            : emptyCol.stream();
             assertFalse(stream2.sorted(NATRUAL_ORDER_CMP.reversed()).iterator().hasNext());
         }
     }
@@ -741,8 +562,8 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             assertEquals(sb2.get().toString(), expectedTotal.toString());
 
             @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
-                            typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
+            Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
+                    typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
             Stream<StringBuilder> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
             assertFalse(emptyStream.peek(LambdaUtilities.appendSBConsumer(sb1)).iterator().hasNext());
@@ -759,18 +580,18 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             Collection<StringBuilder> c1 = generateData(DATA_SIZE);
             Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
                     : (type == ParallelType.Sequential) ? c1.parallelStream().sequential()
-                    : c1.stream();
+                            : c1.stream();
             Object[] arr1 = stream1.toArray();
             Object[] arr2 = c1.toArray();
             assertEquals(arr1, arr2);
 
             @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyCol = hasIni
+            Collection<StringBuilder> emptyCol = hasIni
                     ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
             Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyCol.parallelStream().sequential()
-                    : emptyCol.stream();
+                            : emptyCol.stream();
             assertEquals(stream2.toArray().length, 0);
         }
     }
@@ -801,18 +622,18 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             boolean isFirst = rand.nextBoolean();
             Stream<StringBuilder> stream = (type == ParallelType.Parallel) ? c.parallelStream()
                     : (type == ParallelType.Sequential) ? c.stream().sequential()
-                    : c.stream();
+                            : c.stream();
             Map<LambdaUtilities.CharType, List<StringBuilder>> result
                     = stream.collect(Collectors.groupingBy(LambdaUtilities.sbGenericFunction(isFirst)));
             verifyGroupBy(result, isFirst);
 
             @SuppressWarnings("cast")
-                    Collection<StringBuilder> emptyList = hasIni
+            Collection<StringBuilder> emptyList = hasIni
                     ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
                     : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
             Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyList.parallelStream()
                     : (type == ParallelType.Sequential) ? emptyList.stream().sequential()
-                    : emptyList.stream();
+                            : emptyList.stream();
             assertTrue(stream2.collect(Collectors.groupingBy(LambdaUtilities.sbGenericFunction(isFirst))).isEmpty());
         }
     }
@@ -847,9 +668,9 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             }
         }
     }
-    
+
     private void verifyFlatBiBlock(Collection<StringBuilder> orig, List<StringBuilder> result, int selected, int unit) throws Exception {
-        
+
         switch (selected) {
             case 0:
                 assertEquals(result.size(), 0);
