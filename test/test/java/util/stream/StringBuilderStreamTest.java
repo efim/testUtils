@@ -48,6 +48,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -60,15 +62,11 @@ import org.testng.annotations.Test;
 import test.java.util.LambdaUtilities;
 import test.java.util.StringUtilities;
 
-public class StringBuilderStreamTest<T extends Collection<StringBuilder>> implements ITest {
+public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extends StreamTestTemplate<StringBuilder> {
 
     private final static int MIN_LEN = 1 << 2;
 
     private final static int MAX_LEN = 1 << 8;
-
-    private final static int DATA_SIZE = 1 << 10;
-
-    private final static Random rand = new Random(System.currentTimeMillis());
 
     private final static Comparator<StringBuilder> NATRUAL_ORDER_CMP = (sb1, sb2) -> sb1.toString().compareTo(sb2.toString());
 
@@ -109,35 +107,24 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> implem
         while (it.hasNext()) {
             StringBuilder current = it.next();
             char checkChar = current.charAt(isFirst ? 0 : current.toString().length() - 1);
+            Function<Boolean, Boolean> conditional = (check) -> {
+                if (!all && check) {
+                    return true;
+                } else if (all & !check) {
+                    return false;
+                }
+                return all;
+            };
+            
             switch (charType) {
                 case DIGIT:
-                    if (!all && Character.isDigit(checkChar)) {
-                        return true;
-                    } else if (all && !Character.isDigit(checkChar)) {
-                        return false;
-                    }
-                    break;
+                    return conditional.apply(Character.isDigit(checkChar));
                 case LOWERCASE:
-                    if (!all && Character.isLowerCase(checkChar)) {
-                        return true;
-                    } else if (all && !Character.isLowerCase(checkChar)) {
-                        return false;
-                    }
-                    break;
+                    return conditional.apply(Character.isLowerCase(checkChar));
                 case UPPERCASE:
-                    if (!all && Character.isUpperCase(checkChar)) {
-                        return true;
-                    } else if (all && !Character.isUpperCase(checkChar)) {
-                        return false;
-                    }
-                    break;
+                    return conditional.apply(Character.isUpperCase(checkChar));
                 default:
-                    if (!all && !Character.isLetterOrDigit(checkChar)) {
-                        return true;
-                    } else if (all && Character.isLetterOrDigit(checkChar)) {
-                        return false;
-                    }
-                    break;
+                    return conditional.apply((!Character.isLetterOrDigit(checkChar)));
             }
         }
         return all;
@@ -145,17 +132,9 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> implem
 
     protected Class<T> typeObject;
 
-    protected boolean hasIni;
-
-    protected int initSize;
-
     public StringBuilderStreamTest(Class<T> clazz, int... initSizes) {
+        super(clazz, initSizes);
         this.typeObject = clazz;
-        assert (initSizes.length <= 1);
-        if (initSizes.length == 1) {
-            hasIni = true;
-            this.initSize = initSizes[0];
-        }
     }
 
     @Override
@@ -486,9 +465,9 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> implem
                         : col1.stream();
                 java.util.Optional<StringBuilder> optional = stream1.max(comp);
                 assertTrue(optional.isPresent());
-                assertEquals(optional.get(), getMax(col1, comp));
                 assertEquals(optional.get(), getMax1(col1, comp));
                 assertEquals(optional.get(), getMax2(col1, comp));
+                assertEquals(optional.get(), getMax3(col1, comp));
 
                 @SuppressWarnings("cast")
                         Collection<StringBuilder> emptyCol = hasIni
@@ -515,9 +494,9 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> implem
                         : col1.stream();
                 java.util.Optional<StringBuilder> optional = stream1.min(comp);
                 assertTrue(optional.isPresent());
-                assertEquals(optional.get(), getMin(col1, comp));
                 assertEquals(optional.get(), getMin1(col1, comp));
                 assertEquals(optional.get(), getMin2(col1, comp));
+                assertEquals(optional.get(), getMin3(col1, comp));
 
                 @SuppressWarnings("cast")
                         Collection<StringBuilder> emptyCol = hasIni
@@ -838,6 +817,7 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> implem
         }
     }
 
+    @Override
     protected Collection<StringBuilder> generateData(int n) throws Exception {
         Collection<StringBuilder> col = LambdaUtilities.create(typeObject);
         for (int row = 0; row < n; row++) {
@@ -916,79 +896,5 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> implem
             default:
                 break;
         }
-    }
-
-    private StringBuilder getMax(Collection<StringBuilder> col, Comparator<StringBuilder> c) {
-        assert (!col.isEmpty());
-        Iterator<StringBuilder> it = col.iterator();
-        StringBuilder max = it.next();
-        while (it.hasNext()) {
-            StringBuilder next = it.next();
-            if (c.compare(max, next) < 0) {
-                max = next;
-            }
-        }
-        return max;
-    }
-
-    private StringBuilder getMax1(Collection<StringBuilder> col, Comparator<StringBuilder> c) {
-        assert (!col.isEmpty());
-        StringBuilder any = col.iterator().next();
-        java.util.Optional<StringBuilder> max = col.stream().reduce(LambdaUtilities.maxSBBinaryOperator(c));
-        assert (max.isPresent());
-        return max.get();
-    }
-
-    private StringBuilder getMax2(Collection<StringBuilder> col, Comparator<StringBuilder> c) {
-        assert (!col.isEmpty());
-        StringBuilder any = col.iterator().next();
-        StringBuilder max = col.stream().reduce(any, LambdaUtilities.maxStringBuilderFunction(c),
-                LambdaUtilities.maxSBBinaryOperator(c));
-        return max;
-    }
-
-    private StringBuilder getMin(Collection<StringBuilder> col, Comparator<StringBuilder> c) {
-        assert (!col.isEmpty());
-        Iterator<StringBuilder> it = col.iterator();
-        StringBuilder min = it.next();
-        while (it.hasNext()) {
-            StringBuilder next = it.next();
-            if (c.compare(min, next) > 0) {
-                min = next;
-            }
-        }
-        return min;
-    }
-
-    private StringBuilder getMin1(Collection<StringBuilder> col, Comparator<StringBuilder> c) {
-        assert (!col.isEmpty());
-        java.util.Optional<StringBuilder> min = col.stream().reduce(LambdaUtilities.minSBBinaryOperator(c));
-        assert (min.isPresent());
-        return min.get();
-    }
-
-    private StringBuilder getMin2(Collection<StringBuilder> col, Comparator<StringBuilder> c) {
-        assert (!col.isEmpty());
-        StringBuilder any = col.iterator().next();
-        StringBuilder min = col.stream().reduce(any, LambdaUtilities.minStringBuilderFunction(c),
-                LambdaUtilities.minSBBinaryOperator(c));
-        return min;
-    }
-
-    private void verifySlice(Iterator<StringBuilder> itOrg, Iterator<StringBuilder> itSliced, int skip, int limit) {
-        int pos = 0;
-        while (itOrg.hasNext() && pos++ < skip) {
-            itOrg.next();
-        }
-
-        while (itOrg.hasNext() && pos++ < limit) {
-            assertEquals(itOrg.next(), itSliced.next());
-        }
-
-    }
-
-    private enum ParallelType {
-
-        Parallel, Sequential, Default
     }
 }

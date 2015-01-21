@@ -1,7 +1,25 @@
+
 /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package test.java.util.stream;
 
@@ -15,12 +33,10 @@ import java.util.function.BiPredicate;
 import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 import static org.testng.Assert.assertEquals;
 import org.testng.ITest;
 import test.java.util.LambdaUtilities;
-import test.java.util.StringUtilities;
 
 /**
  *
@@ -87,8 +103,7 @@ public class StreamTestTemplate<T> implements ITest {
     }
 
     protected Collection<T> generateData(int size) throws Exception {
-        
-        
+
         Collection<T> col = hasIni ? LambdaUtilities.create(typeObject, initSize)
                 : LambdaUtilities.create(typeObject);
         for (int i = 0; i < size; i++) {
@@ -111,9 +126,9 @@ public class StreamTestTemplate<T> implements ITest {
                 val = next;
             }
         }
-        return val;        
+        return val;
     }
-    
+
     protected T getMax1(Collection<T> col, Comparator<T> c) {
         return getValueByIterator(col, (max, next) -> c.compare(max, next) < 0);
     }
@@ -125,7 +140,7 @@ public class StreamTestTemplate<T> implements ITest {
     protected T getMin1(Collection<T> col, Comparator<T> c) {
         return getValueByIterator(col, (min, next) -> c.compare(min, next) > 0);
     }
-    
+
     private T getValueByReduce(Collection<T> col, BinaryOperator<T> valueChoser) {
         assert (!col.isEmpty());
         java.util.Optional<T> val = col.stream().reduce(valueChoser);
