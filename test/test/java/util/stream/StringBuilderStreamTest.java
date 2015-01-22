@@ -35,8 +35,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
+import java.util.Optional;
 import java.util.Stack;
 import java.util.Vector;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -46,7 +45,6 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -283,107 +281,79 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
 
     @Test
     @SuppressWarnings("unchecked")
-    public void testReduceWithoutBase() throws Exception {
+    public void testReduce() throws Exception {
+
+        Boolean[] consts = {true, false};
+        for (Boolean withBase : consts) {
         Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
+        
+            while (iter.hasNext()) {
+                ParallelType type = iter.next();
             // Can't predict Parallel Add/Substract reduce result, give up
-            // testing on parallel substract test
-            if (type == ParallelType.Parallel) {
-                continue;
+                // testing on parallel substract test
+                if (type == ParallelType.Parallel) {
+                    continue;
+                }
+                Collection<StringBuilder> col1 = generateData(DATA_SIZE / 10);
+
+                StringBuilder base = (StringBuilder) col1.toArray()[rand.nextInt(col1.size())];
+                StringBuilder total = withBase 
+                        ? new StringBuilder(base.toString())
+                        : new StringBuilder();
+
+                Stream<StringBuilder> streamPlus = getStreamFromCollection(col1, type);
+                Optional<StringBuilder> oiPlus = withBase 
+                        ? Optional.of(streamPlus.reduce(base, LambdaUtilities.appendSBBinaryOperator()))
+                        : streamPlus.reduce(LambdaUtilities.appendSBBinaryOperator());
+                
+
+                Iterator<StringBuilder> it1 = col1.iterator();
+                while (it1.hasNext()) {
+                    total.append(it1.next());
+                }
+                assertEquals(oiPlus.get().toString(), total.toString());
+
+                ArrayList<StringBuilder> list1 = new ArrayList<>(col1);
+                list1.add(0, total);
+                
+                Stream<StringBuilder> streamSubtract = getStreamFromCollection(list1, type);
+                Optional<StringBuilder> oiSub = withBase
+                        ? Optional.of(streamSubtract.reduce(base, LambdaUtilities.deleteSBBinaryOperator()))
+                        : streamSubtract.reduce(LambdaUtilities.deleteSBBinaryOperator());
+                assertTrue(oiSub.isPresent());
+
+
+                Iterator<StringBuilder> it2 = withBase ? col1.iterator() : list1.iterator();
+                StringBuilder subTotal = withBase 
+                        ? total.delete(0, base.length())
+                        : it2.next();                
+                while (it2.hasNext()) {
+                    String s = it2.next().toString();
+                    int i1 = subTotal.indexOf(s);
+                    int i2 = i1 + s.length();
+                    subTotal.delete(i1, i2);
+                }
+
+                assertEquals(subTotal.toString(), oiSub.get().toString());
+
+                @SuppressWarnings("cast")
+                Collection<StringBuilder> emptyCol = getEmptyCollection();
+                Stream<StringBuilder> stream2 = getStreamFromCollection(emptyCol, type);
+                Optional<StringBuilder> emptyOp = withBase
+                        ? Optional.of(stream2.reduce(base, rand.nextBoolean() 
+                            ? LambdaUtilities.appendSBBinaryOperator()
+                            : LambdaUtilities.deleteSBBinaryOperator()))
+                        : stream2.reduce(rand.nextBoolean() 
+                            ? LambdaUtilities.appendSBBinaryOperator()
+                            : LambdaUtilities.deleteSBBinaryOperator());
+                
+                if (withBase) {
+                    assertEquals(emptyOp.get(), base);
+                } else {
+                    assertFalse(emptyOp.isPresent());
+                }
+                
             }
-            Collection<StringBuilder> col1 = generateData(DATA_SIZE / 10);
-            Stream<StringBuilder> streamPlus = (type == ParallelType.Parallel) ? col1.parallelStream()
-                    : (type == ParallelType.Sequential) ? col1.stream().sequential() : col1.stream();
-            java.util.Optional<StringBuilder> oiPlus = streamPlus.reduce(LambdaUtilities.appendSBBinaryOperator());
-            assertTrue(oiPlus.isPresent());
-            StringBuilder total = new StringBuilder();
-            Iterator<StringBuilder> it1 = col1.iterator();
-            while (it1.hasNext()) {
-                total.append(it1.next());
-            }
-            assertEquals(oiPlus.get().toString(), total.toString());
-            ArrayList<StringBuilder> list1 = new ArrayList<>(col1);
-            list1.add(0, total);
-            Stream<StringBuilder> streamSubtract = (type == ParallelType.Parallel) ? list1.parallelStream()
-                    : (type == ParallelType.Sequential) ? list1.stream().sequential() : list1.stream();
-            java.util.Optional<StringBuilder> oiSubtract = streamSubtract.reduce(LambdaUtilities
-                    .deleteSBBinaryOperator());
-            assertTrue(oiSubtract.isPresent());
-
-            Iterator<StringBuilder> it2 = list1.iterator();
-            StringBuilder subTotal = it2.next();
-            while (it2.hasNext()) {
-                String s = it2.next().toString();
-                int i1 = subTotal.indexOf(s);
-                int i2 = i1 + s.length();
-                subTotal.delete(i1, i2);
-            }
-            assertEquals(oiSubtract.get().toString(), subTotal.toString());
-
-            @SuppressWarnings("cast")
-            Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
-                    typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
-            java.util.Optional<StringBuilder> emptyOp = stream2.reduce(rand.nextBoolean() ? LambdaUtilities
-                    .appendSBBinaryOperator() : LambdaUtilities.deleteSBBinaryOperator());
-            assertFalse(emptyOp.isPresent());
-        }
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testReduceWithBase() throws Exception {
-        Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            // Can't predict Parallel Add/Substract reduce result, give up
-            // testing on parallel substract test
-            if (type == ParallelType.Parallel) {
-                continue;
-            }
-            Collection<StringBuilder> col1 = generateData(DATA_SIZE / 10);
-
-            StringBuilder base = (StringBuilder) col1.toArray()[rand.nextInt(col1.size())];
-            StringBuilder total = new StringBuilder(base.toString());
-
-            Stream<StringBuilder> streamPlus = (type == ParallelType.Parallel) ? col1.parallelStream()
-                    : (type == ParallelType.Sequential) ? col1.stream().sequential() : col1.stream();
-            StringBuilder oiPlus = streamPlus.reduce(base, LambdaUtilities.appendSBBinaryOperator());
-
-            Iterator<StringBuilder> it1 = col1.iterator();
-            while (it1.hasNext()) {
-                total.append(it1.next());
-            }
-            assertEquals(oiPlus.toString(), total.toString());
-
-            ArrayList<StringBuilder> list1 = new ArrayList<>(col1);
-            list1.add(0, total);
-
-            Stream<StringBuilder> streamSubtract = (type == ParallelType.Parallel) ? list1.parallelStream()
-                    : (type == ParallelType.Sequential) ? list1.stream().sequential() : list1.stream();
-            StringBuilder oiSub = streamSubtract.reduce(base, LambdaUtilities.deleteSBBinaryOperator());
-
-            StringBuilder subTotal = total.delete(0, base.length());
-            Iterator<StringBuilder> it2 = col1.iterator();
-            while (it2.hasNext()) {
-                String s = it2.next().toString();
-                int i1 = subTotal.indexOf(s);
-                int i2 = i1 + s.length();
-                subTotal.delete(i1, i2);
-            }
-
-            assertEquals(subTotal.toString(), oiSub.toString());
-
-            @SuppressWarnings("cast")
-            Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
-                    typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
-            StringBuilder emptyOp = stream2.reduce(base, rand.nextBoolean() ? LambdaUtilities.appendSBBinaryOperator()
-                    : LambdaUtilities.deleteSBBinaryOperator());
-            assertEquals(emptyOp, base);
         }
     }
 
@@ -408,10 +378,8 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
                 continue;
             }
             Collection<StringBuilder> c1 = generateData(DATA_SIZE / 10);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.stream().sequential() : c1.stream();
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.stream().sequential() : c1.stream();
+            Stream<StringBuilder> stream1 = getStreamFromCollection(c1, type);
+            Stream<StringBuilder> stream2 = getStreamFromCollection(c1, type);
             StringBuilder sb1 = new StringBuilder();
             Iterator<StringBuilder> it = stream1.peek(LambdaUtilities.appendSBConsumer(sb1)).iterator();
             StringBuilder expectedTotal = new StringBuilder();
@@ -425,14 +393,13 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
             assertEquals(sb2.get().toString(), expectedTotal.toString());
 
             @SuppressWarnings("cast")
-            Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
-                    typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
+                    Collection<StringBuilder> emptyCol = getEmptyCollection();
+            Stream<StringBuilder> emptyStream = getStreamFromCollection(emptyCol, type);
             assertFalse(emptyStream.peek(LambdaUtilities.appendSBConsumer(sb1)).iterator().hasNext());
             assertEquals(sb1.toString(), expectedTotal.toString());
         }
     }
+
 
     @Test
     public void testToArray() throws Exception {
