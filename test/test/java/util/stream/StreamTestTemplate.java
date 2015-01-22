@@ -28,10 +28,15 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
+import java.util.SortedSet;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -40,6 +45,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import static org.testng.Assert.assertEquals;
@@ -102,20 +108,20 @@ public class StreamTestTemplate<T> implements ITest {
             }
         });
     }
-    
-        protected void singleStreamTestIteration(Function<Stream<T>, Consumer<Collection<T>>> assertions) throws Exception {
+
+    protected void singleStreamTestIteration(Function<Stream<T>, Consumer<Collection<T>>> assertions) throws Exception {
         simpleTestIteration(collection -> type -> {
             try {
                 Stream<T> stream = getStreamFromCollection(collection, type);
-                
+
                 assertions.apply(stream).accept(collection);
-                
+
             } catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
-            
+
         });
-    }    
+    }
 
     protected void singleStreamVerifyPredicateTest(Function<Stream<T>, Function<Predicate<T>, Consumer<Boolean>>> otherDeclarationAndAssert, boolean verifyMatchForAll) throws Exception {
 
@@ -124,11 +130,10 @@ public class StreamTestTemplate<T> implements ITest {
         //this should be implemented separately for different children
         throw new UnsupportedOperationException();
     }
-    
+
     protected Predicate<T> getRandomPredicate() throws Exception {
         throw new UnsupportedOperationException();
     }
-
 
     protected Stream<T> getStreamFromCollection(Collection<T> l, ParallelType typeVar) {
         return (typeVar == ParallelType.Parallel) ? l.parallelStream()
@@ -220,11 +225,11 @@ public class StreamTestTemplate<T> implements ITest {
             assertEquals(itOrg.next(), itSliced.next());
         }
     }
-    
+
     @SuppressWarnings("unchecked")
     public void testAllMatch() throws Exception {
         singleStreamVerifyPredicateTest(
-                stream -> p ->  verifyMatch -> {
+                stream -> p -> verifyMatch -> {
                     assertEquals(stream.allMatch(p), (boolean) verifyMatch);
                 }, true);
 
@@ -238,7 +243,7 @@ public class StreamTestTemplate<T> implements ITest {
             }
         });
     }
-    
+
     @SuppressWarnings("unchecked")
     public void testAnyMatch() throws Exception {
 
@@ -259,9 +264,9 @@ public class StreamTestTemplate<T> implements ITest {
                     }
                 });
     }
-    
+
     @SuppressWarnings("unchecked")
-    public void testConcat(Predicate<T> p, Comparator<T> comparator, 
+    public void testConcat(Predicate<T> p, Comparator<T> comparator,
             Function<Integer, BiConsumer<List<T>, List<T>>> assertionOfEquality) throws Exception {
         simpleTestIteration(
                 c -> type -> {
@@ -306,10 +311,9 @@ public class StreamTestTemplate<T> implements ITest {
                     }
                 });
     }
-    
+
     @SuppressWarnings("unchecked")
-    public void testFilter(Predicate<T> p1, Comparator<T> comparator
-            , Consumer<Collection<T>> firstAssertion) throws Exception {
+    public void testFilter(Predicate<T> p1, Comparator<T> comparator, Consumer<Collection<T>> firstAssertion) throws Exception {
 
         singleStreamTestIteration(stream -> c -> {
             // Filter the data, check if it works as expected.
@@ -393,7 +397,7 @@ public class StreamTestTemplate<T> implements ITest {
             assertFalse(emptyFirst.isPresent());
         });
     }
-    
+
     @SuppressWarnings("unchecked")
     public void testForEach() throws Exception {
         singleStreamTestIteration(stream -> collection -> {
@@ -402,7 +406,186 @@ public class StreamTestTemplate<T> implements ITest {
             });
         });
     }
-    
+
+    @SuppressWarnings("unchecked")
+    public void testLimit(Supplier<Function<T, Stream<T>>> flatMapper, int limit) throws Exception {
+        simpleTestIteration(col -> type -> {
+            Stream<T> stream1 = getStreamFromCollection(col, type);
+            List<T> result1 = stream1.flatMap(flatMapper.get()).collect(Collectors.<T>toList());
+
+            Stream<T> stream2 = getStreamFromCollection(col, type);
+            List<T> result2 = stream2.flatMap(flatMapper.get()).limit(limit)
+                    .collect(Collectors.<T>toList());
+
+            if (col instanceof Set) {
+                assertTrue(result2.size() <= (limit < result1.size() ? limit : result1.size()));
+            } else {
+                assertEquals(result2.size(), (limit < result1.size() ? limit : result1.size()));
+            }
+        });
+    }
+
+    public void testGroupBy(Supplier<Function<T, ?>> genericFunction, Function<Map, Consumer<Collection<T>>> verifyGroupBy) throws Throwable {
+        simpleTestIteration(c -> type -> {
+            try {
+                Stream<T> stream = getStreamFromCollection(c, type);
+                Map result
+                        = stream.collect(Collectors.groupingBy(genericFunction.get()));
+                verifyGroupBy.apply(result).accept(c);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+
+        emptyStreamTestIteration((emptyStream) -> {
+            assertTrue(emptyStream.collect(Collectors.groupingBy(genericFunction.get())).isEmpty());
+        });
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void testMax(Function<Object, Object> valueGetter, Comparator<T> c) throws Exception {
+
+        singleStreamTestIteration(stream -> collection -> {
+            java.util.Optional<?> optional = stream.max(c);
+            assertTrue(optional.isPresent());
+            assertEquals(valueGetter.apply(optional.get()), valueGetter.apply(getMax1(collection, c)));
+            assertEquals(valueGetter.apply(optional.get()), valueGetter.apply(getMax2(collection, c)));
+            assertEquals(valueGetter.apply(optional.get()), valueGetter.apply(getMax3(collection, c)));
+        });
+
+        emptyStreamTestIteration(stream -> {
+            assertFalse(stream.max(c).isPresent());
+        });
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void testMin(Function<Object, Object> valueGetter, Comparator<T> c) throws Exception {
+
+        singleStreamTestIteration(stream -> collection -> {
+            java.util.Optional<?> optional = stream.min(c);
+            assertTrue(optional.isPresent());
+            assertEquals(valueGetter.apply(optional.get()), valueGetter.apply(getMin1(collection, c)));
+            assertEquals(valueGetter.apply(optional.get()), valueGetter.apply(getMin2(collection, c)));
+            assertEquals(valueGetter.apply(optional.get()), valueGetter.apply(getMin3(collection, c)));
+        });
+
+        emptyStreamTestIteration(stream -> {
+            assertFalse(stream.min(c).isPresent());
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    public void testNoneMatch(Function<Collection<T>, Boolean> getNonexpectedValue, Predicate<T> p) throws Exception {
+        simpleTestIteration(c -> type -> {
+            try {
+                Stream<T> stream1 = getStreamFromCollection(c, type);
+                assertEquals(stream1.noneMatch(p),
+                        (boolean) getNonexpectedValue.apply(c));
+
+                // Empty stream's noneMatch will return true always
+                @SuppressWarnings("cast")
+                Collection<T> emptyCol = getEmptyCollection();
+                Stream<T> stream2 = getStreamFromCollection(emptyCol, type);
+                assertTrue(stream2.noneMatch(p));
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    public void testSubstream() throws Exception {
+        BiFunction<Integer, Integer, Integer> bf = LambdaUtilities.randBetweenIntegerFunction();
+
+        ToIntFunction<Collection<T>> randomSkip = (col) -> rand.nextInt(col.size());
+        BiFunction<Collection<T>, Integer, Integer> randomLimit = (col, skip) -> rand.nextBoolean()
+                ? bf.apply(0, col.size() - skip)
+                : rand.nextInt(Integer.MAX_VALUE);
+
+        singleStreamTestIteration(stream -> c -> {
+            int skip = randomSkip.applyAsInt(c);
+            int limit = randomLimit.apply(c, skip);
+
+            Iterator<T> it = stream.skip(skip).limit(limit).iterator();
+            verifySlice(c.iterator(), it, skip, limit);
+        });
+
+        singleStreamTestIteration(stream -> c -> {
+            int skip = randomSkip.applyAsInt(c);
+            //limit=0 causes empty stream
+            assertFalse(stream.skip(skip).limit(0).iterator().hasNext());
+        });
+
+        singleStreamTestIteration(stream -> c -> {
+            //skip exceed collection size cause  empty stream
+            int skipExceeded = bf.apply(c.size(), Integer.MAX_VALUE);
+            assertFalse(stream.skip(skipExceeded).limit(1).iterator().hasNext());
+        });
+
+        simpleTestIteration(c -> type -> {
+            try {
+                @SuppressWarnings("cast")
+                int skip = randomSkip.applyAsInt(c);
+                int limit = randomLimit.apply(c, skip);
+                Collection<T> emptyCol = getEmptyCollection();
+                Stream<T> emptyStream = getStreamFromCollection(emptyCol, type);
+                assertFalse(emptyStream.skip(skip).limit(limit).iterator().hasNext());
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    public void testSorted(Comparator<T> c, Function<Object, Object> unpack) throws Exception {
+        singleStreamTestIteration(stream -> col -> {
+
+            List<T> reversed = stream.sorted(c.reversed()).collect(Collectors.<T>toList());
+            // The reason conver l to sorted is CopyOnWriteArrayList doesn't
+            // support sort, we use ArrayList sort data instead
+            List<T> sorted = new ArrayList<>(col);
+            Collections.sort(sorted, c);
+
+            // SortedSet instance's stream can't be reordered
+            if (!(col instanceof SortedSet)) {
+                Collections.reverse(sorted);
+                for (int i = 0; i < sorted.size(); i++) {
+                    assertEquals(unpack.apply(sorted.get(i)), unpack.apply(reversed.get(i)));
+                }
+            }
+        });
+
+        emptyStreamTestIteration(stream -> {
+            assertFalse(stream.sorted(Collections.reverseOrder()).iterator().hasNext());
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    public void testToArray() throws Exception {
+        singleStreamTestIteration(stream -> c -> {
+            Object[] arr1 = stream.toArray();
+            Object[] arr2 = c.toArray();
+            assert (arr1.length == arr2.length);
+            for (int index = 0; index < arr1.length; index++) {
+                assertEquals(arr1[index], arr2[index]);
+            }
+        });
+
+        emptyStreamTestIteration(stream -> {
+            assertEquals(stream.toArray().length, 0);
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    public void testUniqueElements(Function<T, Stream<T>> flatMapper) throws Exception {
+        singleStreamTestIteration(stream -> col -> {
+            Set<T> set1 = new HashSet<>(col);
+            List<T> list2 = stream.flatMap(flatMapper).distinct().collect(Collectors.<T>toList());
+            assertEquals(set1.size(), list2.size());
+            assertTrue(set1.containsAll(list2));
+        });
+    }
+
     protected enum ParallelType {
 
         Parallel, Sequential, Default

@@ -233,28 +233,8 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
 
     @Test
     protected void testLimit() throws Throwable {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c = generateData(DATA_SIZE / 10);
-            int limit = rand.nextInt(DATA_SIZE / 10 * 2);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential()
-                            : c.stream();
-            Collection<StringBuilder> result1 = stream1.flatMap(LambdaUtilities.genSBFlatMapper(2, DATA_SIZE / 10)).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
-
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential()
-                            : c.stream();
-            Collection<StringBuilder> result2 = stream2.flatMap(LambdaUtilities.genSBFlatMapper(2, DATA_SIZE / 10)).limit(limit).collect(Collectors.toCollection(LinkedList<StringBuilder>::new));
-
-            if (limit > result1.size()) {
-                assertTrue(result1.size() == result2.size());
-            } else {
-                assertTrue(result2.size() == limit);
-            }
-        }
+        int limit = rand.nextInt(DATA_SIZE * 2);
+        super.testLimit(() -> LambdaUtilities.genSBFlatMapper(2, DATA_SIZE), limit);
     }
 
     @Test
@@ -277,28 +257,7 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
     @SuppressWarnings({"unchecked", "rawtypes"})
     public void testMax() throws Exception {
         for (Comparator comp : cmps) {
-            Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-            while (iter.hasNext()) {
-                ParallelType type = iter.next();
-                Collection<StringBuilder> col1 = generateData(DATA_SIZE);
-                Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? col1.parallelStream()
-                        : (type == ParallelType.Sequential) ? col1.parallelStream().sequential()
-                                : col1.stream();
-                java.util.Optional<StringBuilder> optional = stream1.max(comp);
-                assertTrue(optional.isPresent());
-                assertEquals(optional.get(), getMax1(col1, comp));
-                assertEquals(optional.get(), getMax2(col1, comp));
-                assertEquals(optional.get(), getMax3(col1, comp));
-
-                @SuppressWarnings("cast")
-                Collection<StringBuilder> emptyCol = hasIni
-                        ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                        : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-                Stream<StringBuilder> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                        : (type == ParallelType.Sequential) ? emptyCol.stream().sequential()
-                                : emptyCol.stream();
-                assertFalse(emptyStream.max(comp).isPresent());
-            }
+            super.testMax(e -> e, comp);
         }
     }
 
@@ -306,59 +265,20 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
     @SuppressWarnings({"unchecked", "rawtypes"})
     public void testMin() throws Exception {
         for (Comparator comp : cmps) {
-            Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-            while (iter.hasNext()) {
-                ParallelType type = iter.next();
-                Collection<StringBuilder> col1 = generateData(DATA_SIZE);
-                Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? col1.parallelStream()
-                        : (type == ParallelType.Sequential) ? col1.parallelStream().sequential()
-                                : col1.stream();
-                java.util.Optional<StringBuilder> optional = stream1.min(comp);
-                assertTrue(optional.isPresent());
-                assertEquals(optional.get(), getMin1(col1, comp));
-                assertEquals(optional.get(), getMin2(col1, comp));
-                assertEquals(optional.get(), getMin3(col1, comp));
-
-                @SuppressWarnings("cast")
-                Collection<StringBuilder> emptyCol = hasIni
-                        ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                        : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-                Stream<StringBuilder> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                        : (type == ParallelType.Sequential) ? emptyCol.stream().sequential()
-                                : emptyCol.stream();
-                assertFalse(emptyStream.min(comp).isPresent());
-            }
+            super.testMax(e -> e, comp);
         }
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testNoneMatch() throws Exception {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c1 = generateData(DATA_SIZE);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.parallelStream().sequential()
-                            : c1.stream();
-            EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
-            LambdaUtilities.CharType charType
-                    = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
-            boolean isFirst = rand.nextBoolean();
-            assertTrue(stream1.noneMatch((Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst))
-                    == verifyMatch(c1, charType, !isFirst, true));
 
-            //Empty stream's noneMatch will return true always
-            @SuppressWarnings("cast")
-            Collection<StringBuilder> emptyCol = hasIni
-                    ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.parallelStream().sequential()
-                            : emptyCol.stream();
-            assertTrue(stream2.noneMatch((Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, !isFirst)));
-        }
+        EnumSet<LambdaUtilities.CharType> set = EnumSet.allOf(LambdaUtilities.CharType.class);
+        LambdaUtilities.CharType charType
+                = (LambdaUtilities.CharType) set.toArray()[rand.nextInt(4)];
+        boolean isFirst = rand.nextBoolean();
+
+        super.testNoneMatch(stream -> verifyMatch(stream, charType, !isFirst, true), (Predicate<StringBuilder>) LambdaUtilities.randomSBPredicate(charType, isFirst));
     }
 
     @Test
@@ -469,71 +389,14 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
 
     @Test
     @SuppressWarnings("unchecked")
+    @Override
     public void testSubstream() throws Exception {
-        Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-        BiFunction<Integer, Integer, Integer> bf = LambdaUtilities.randBetweenIntegerFunction();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> col = generateData(DATA_SIZE);
-            int skip = rand.nextInt(col.size());
-            // limit has more than 50% chance less than col.size() - skip
-            int limit = rand.nextBoolean() ? bf.apply(0, col.size() - skip) : rand.nextInt(Integer.MAX_VALUE);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? col.parallelStream()
-                    : (type == ParallelType.Sequential) ? col.stream().sequential() : col.stream();
-            Iterator<StringBuilder> it = stream1.skip(skip).limit(limit).iterator();
-            verifySlice(col.iterator(), it, skip, limit);
-
-            // limit=0 causes empty stream
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? col.parallelStream()
-                    : (type == ParallelType.Sequential) ? col.stream().sequential() : col.stream();
-            assertFalse(stream2.skip(skip).limit(0).iterator().hasNext());
-
-            // skip exceed collection size cause empty stream
-            Stream<StringBuilder> stream3 = (type == ParallelType.Parallel) ? col.parallelStream()
-                    : (type == ParallelType.Sequential) ? col.stream().sequential() : col.stream();
-            int skipExceeded = bf.apply(col.size(), Integer.MAX_VALUE);
-            assertFalse(stream3.skip(skipExceeded).limit(1).iterator().hasNext());
-
-            @SuppressWarnings("cast")
-            Collection<StringBuilder> emptyCol = hasIni ? (Collection<StringBuilder>) LambdaUtilities.create(
-                    typeObject, initSize) : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> emptyStream = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.stream().sequential() : emptyCol.stream();
-            assertFalse(emptyStream.skip(skip).limit(limit).iterator().hasNext());
-        }
+        super.testSubstream();
     }
 
     @Test
     public void testSorted() throws Exception {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> col = generateData(DATA_SIZE);
-            Stream<StringBuilder> stream = (type == ParallelType.Parallel) ? col.parallelStream()
-                    : (type == ParallelType.Sequential) ? col.parallelStream().sequential()
-                            : col.stream();
-            List<StringBuilder> reversed = stream.sorted(NATRUAL_ORDER_CMP.reversed()).collect(Collectors.<StringBuilder>toList());
-            //The reason conver l to sorted is CopyOnWriteArrayList doesn't support
-            //sort, we use ArrayList sort data instead
-            List<StringBuilder> sorted = new ArrayList<>(col);
-            Collections.sort(sorted, NATRUAL_ORDER_CMP);
-
-            //SortedSet instance's stream can't be reordered
-            if (!(col instanceof SortedSet)) {
-                Collections.sort(sorted, NATRUAL_ORDER_CMP.reversed());
-            }
-            assertEquals(sorted, reversed);
-
-            @SuppressWarnings("cast")
-            Collection<StringBuilder> emptyCol = hasIni
-                    ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.parallelStream().sequential()
-                            : emptyCol.stream();
-            assertFalse(stream2.sorted(NATRUAL_ORDER_CMP.reversed()).iterator().hasNext());
-        }
+        super.testSorted(NATRUAL_ORDER_CMP, e -> e);
     }
 
     @Test
@@ -573,69 +436,18 @@ public class StringBuilderStreamTest<T extends Collection<StringBuilder>> extend
 
     @Test
     public void testToArray() throws Exception {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c1 = generateData(DATA_SIZE);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.parallelStream().sequential()
-                            : c1.stream();
-            Object[] arr1 = stream1.toArray();
-            Object[] arr2 = c1.toArray();
-            assertEquals(arr1, arr2);
-
-            @SuppressWarnings("cast")
-            Collection<StringBuilder> emptyCol = hasIni
-                    ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyCol.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyCol.parallelStream().sequential()
-                            : emptyCol.stream();
-            assertEquals(stream2.toArray().length, 0);
-        }
+        super.testToArray();
     }
 
     @Test
     public void testUniqueElements() throws Exception {
-        Iterator<ParallelType> iter = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c1 = generateData(DATA_SIZE / 10);
-            Set<StringBuilder> set1 = new HashSet<>(c1);
-            Stream<StringBuilder> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                    : (type == ParallelType.Sequential) ? c1.stream().sequential() : c1.stream();
-            List<StringBuilder> list2 = stream1.flatMap(LambdaUtilities.genSBFlatMapper(3, DATA_SIZE / 10)).distinct().collect(Collectors.<StringBuilder>toList());
-            assertEquals(set1.size(), list2.size());
-            assertTrue(set1.containsAll(list2));
-        }
+        super.testUniqueElements(LambdaUtilities.genSBFlatMapper(3, DATA_SIZE));
     }
 
     @Test
     public void testGroupBy() throws Throwable {
-        Iterator<ParallelType> iter
-                = EnumSet.allOf(ParallelType.class).iterator();
-        while (iter.hasNext()) {
-            ParallelType type = iter.next();
-            Collection<StringBuilder> c = generateData(DATA_SIZE);
-
-            boolean isFirst = rand.nextBoolean();
-            Stream<StringBuilder> stream = (type == ParallelType.Parallel) ? c.parallelStream()
-                    : (type == ParallelType.Sequential) ? c.stream().sequential()
-                            : c.stream();
-            Map<LambdaUtilities.CharType, List<StringBuilder>> result
-                    = stream.collect(Collectors.groupingBy(LambdaUtilities.sbGenericFunction(isFirst)));
-            verifyGroupBy(result, isFirst);
-
-            @SuppressWarnings("cast")
-            Collection<StringBuilder> emptyList = hasIni
-                    ? (Collection<StringBuilder>) LambdaUtilities.create(typeObject, initSize)
-                    : (Collection<StringBuilder>) LambdaUtilities.create(typeObject);
-            Stream<StringBuilder> stream2 = (type == ParallelType.Parallel) ? emptyList.parallelStream()
-                    : (type == ParallelType.Sequential) ? emptyList.stream().sequential()
-                            : emptyList.stream();
-            assertTrue(stream2.collect(Collectors.groupingBy(LambdaUtilities.sbGenericFunction(isFirst))).isEmpty());
-        }
+        boolean isFirst = rand.nextBoolean();
+        super.testGroupBy(() -> LambdaUtilities.sbGenericFunction(isFirst), result -> collection -> verifyGroupBy(result, isFirst));
     }
 
     @Override

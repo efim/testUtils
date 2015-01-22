@@ -322,22 +322,17 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
     @Override
     protected void singleStreamVerifyPredicateTest(Function<Stream<Employee>, Function<Predicate<Employee>, Consumer<Boolean>>> otherDeclarationAndAssert, boolean verifyMatchForAll) throws Exception {
 
-        simpleTestIteration(collection -> type -> {
+        singleStreamTestIteration(stream -> collection -> {
             try {
-                Stream<Employee> stream = getStreamFromCollection(collection, type);
-
-
                 Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
                 Employee limit = generateData();
                 limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
                 limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
                 boolean isUP = rand.nextBoolean();
 
-                Predicate<Employee> p =  LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
-
+                Predicate<Employee> p = LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator());
 
                 boolean verifyMatch = verifyMatch(collection, limit, isUP, verifyMatchForAll, rule);
-
 
                 otherDeclarationAndAssert.apply(stream).apply(p).accept(verifyMatch);
             } catch (Exception ex) {
@@ -366,10 +361,10 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
         limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
         limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
         boolean isUP = rand.nextBoolean();
-        
+
         Comparator<Employee> comparator = rule.getComparator();
         Predicate<Employee> p = LambdaUtilities.randomGenericPredicate(isUP, limit, comparator);
-        
+
         super.testConcat(p, comparator, i -> (testList, expectedList) -> {
             assertEquals(rule.getValue(testList.get(i)), rule.getValue(expectedList.get(i)));
         });
@@ -385,7 +380,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
         limit1.setAge(rand.nextInt(Employee.MAX_AGE * 2));
         boolean isUP1 = rand.nextBoolean();
         Predicate<Employee> p1 = LambdaUtilities.randomGenericPredicate(isUP1, limit1, rule.getComparator());
-        
+
         Comparator<Employee> comparator = rule.getComparator();
 
         super.testFilter(p1, comparator, result1 -> assertTrue(verifyMatch(result1, limit1, isUP1, true, rule)));
@@ -407,43 +402,18 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
 
     @Test
     public void testGroupBy() throws Throwable {
-        simpleTestIteration(c -> type -> {
-            try {
-                Stream<Employee> stream = getStreamFromCollection(c, type);
-                Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-                Map<Object, List<Employee>> result
-                        = stream.collect(Collectors.groupingBy(employeeGenericFunction(rule)));
-                verifyGroupBy(result, c, rule);
+        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
 
-                @SuppressWarnings("cast")
-                Collection<Employee> emptyList = getEmptyCollection();
-                Stream<Employee> emptyStream = getStreamFromCollection(emptyList, type);
-                assertTrue(emptyStream.collect(Collectors.groupingBy(employeeGenericFunction(rule))).isEmpty());
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        });
+        super.testGroupBy(() -> employeeGenericFunction(rule), result -> collection -> verifyGroupBy(result, collection, rule));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testLimit() throws Exception {
-        simpleTestIteration(col -> type -> {
-            int limit = rand.nextInt(DATA_SIZE * 2);
-            Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-            Stream<Employee> stream1 = getStreamFromCollection(col, type);
-            List<Employee> result1 = stream1.flatMap(genEmployeeFlatMapper(2, rule)).collect(Collectors.<Employee>toList());
+        int limit = rand.nextInt(DATA_SIZE * 2);
 
-            Stream<Employee> stream2 = getStreamFromCollection(col, type);
-            List<Employee> result2 = stream2.flatMap(genEmployeeFlatMapper(2, rule)).limit(limit)
-                    .collect(Collectors.<Employee>toList());
-
-            if (col instanceof Set) {
-                assertTrue(result2.size() <= (limit < result1.size() ? limit : result1.size()));
-            } else {
-                assertEquals(result2.size(), (limit < result1.size() ? limit : result1.size()));
-            }
-        });
+        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
+        super.testLimit(() -> genEmployeeFlatMapper(2, rule), limit);
     }
 
     @Test
@@ -454,17 +424,7 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
 
         for (Comparator<Employee> c : new Comparator[]{c1, c1.reversed()}) {
 
-            singleStreamTestIteration(stream -> collection -> {
-                java.util.Optional<Employee> optional = stream.max(c);
-                assertTrue(optional.isPresent());
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax1(collection, c)));
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax2(collection, c)));
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMax3(collection, c)));
-            });
-
-            emptyStreamTestIteration(stream -> {
-                assertFalse(stream.max(c).isPresent());
-            });
+            super.testMax((Object employee) -> rule.getValue((Employee) employee), c);
         }
     }
 
@@ -476,145 +436,54 @@ public class EmployeeStreamTest<T extends Collection<Employee>> extends StreamTe
 
         for (Comparator<Employee> c : new Comparator[]{c1, c1.reversed()}) {
 
-            singleStreamTestIteration(stream -> collection -> {
-                java.util.Optional<Employee> optional = stream.min(c);
-                assertTrue(optional.isPresent());
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin1(collection, c)));
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin2(collection, c)));
-                assertEquals(rule.getValue(optional.get()), rule.getValue(getMin3(collection, c)));
-            });
-
-            emptyStreamTestIteration(stream -> {
-                assertFalse(stream.min(c).isPresent());
-            });
+            super.testMin((Object employee) -> rule.getValue((Employee) employee), c);
         }
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testNoneMatch() throws Exception {
-        simpleTestIteration(c -> type -> {
-            try {
-                Collection<Employee> c1 = generateData(DATA_SIZE);
-                Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-                Employee limit = generateData();
-                limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
-                limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
-                boolean isUP = rand.nextBoolean();
-                Stream<Employee> stream1 = (type == ParallelType.Parallel) ? c1.parallelStream()
-                        : (type == ParallelType.Sequential) ? c1.stream().sequential() : c1.stream();
-                assertEquals(stream1.noneMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())),
-                        verifyMatch(c1, limit, !isUP, true, rule));
+        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
+        Employee limit = generateData();
+        limit.setSalary(rand.nextFloat() * (Employee.MAX_SALARY * 2));
+        limit.setAge(rand.nextInt(Employee.MAX_AGE * 2));
+        boolean isUP = rand.nextBoolean();
 
-                // Empty stream's noneMatch will return true always
-                @SuppressWarnings("cast")
-                Collection<Employee> emptyCol = getEmptyCollection();
-                Stream<Employee> stream2 = getStreamFromCollection(emptyCol, type);
-                assertTrue(stream2.noneMatch(LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator())));
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        });
+        Function<Collection<Employee>, Boolean> getNonexpectedValue
+                = stream -> verifyMatch(stream, limit, !isUP, true, rule);
+
+        super.testNoneMatch(getNonexpectedValue, LambdaUtilities.randomGenericPredicate(isUP, limit, rule.getComparator()));
     }
 
     @Test
     @SuppressWarnings("unchecked")
+    @Override
     public void testSubstream() throws Exception {
-        BiFunction<Integer, Integer, Integer> bf = LambdaUtilities.randBetweenIntegerFunction();
-
-        ToIntFunction<Collection<Employee>> randomSkip = (col) -> rand.nextInt(col.size());
-        BiFunction<Collection<Employee>, Integer, Integer> randomLimit = (col, skip) -> rand.nextBoolean()
-                ? bf.apply(0, col.size() - skip)
-                : rand.nextInt(Integer.MAX_VALUE);
-
-        singleStreamTestIteration(stream -> c -> {
-            int skip = randomSkip.applyAsInt(c);
-            int limit = randomLimit.apply(c, skip);
-
-            Iterator<Employee> it = stream.skip(skip).limit(limit).iterator();
-            verifySlice(c.iterator(), it, skip, limit);
-        });
-
-        singleStreamTestIteration(stream -> c -> {
-            int skip = randomSkip.applyAsInt(c);
-            //limit=0 causes empty stream
-            assertFalse(stream.skip(skip).limit(0).iterator().hasNext());
-        });
-
-        singleStreamTestIteration(stream -> c -> {
-            //skip exceed collection size cause  empty stream
-            int skipExceeded = bf.apply(c.size(), Integer.MAX_VALUE);
-            assertFalse(stream.skip(skipExceeded).limit(1).iterator().hasNext());
-        });
-
-        simpleTestIteration(c -> type -> {
-            try {
-                @SuppressWarnings("cast")
-                int skip = randomSkip.applyAsInt(c);
-                int limit = randomLimit.apply(c, skip);
-                Collection<Employee> emptyCol = getEmptyCollection();
-                Stream<Employee> emptyStream = getStreamFromCollection(emptyCol, type);
-                assertFalse(emptyStream.skip(skip).limit(limit).iterator().hasNext());
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        });
+        super.testSubstream();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testSorted() throws Exception {
-        singleStreamTestIteration(stream -> col -> {
-            Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-            Comparator<Employee> c = rule.getComparator();
+        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
+        Comparator<Employee> c = rule.getComparator();
 
-            List<Employee> reversed = stream.sorted(c.reversed()).collect(Collectors.<Employee>toList());
-            // The reason conver l to sorted is CopyOnWriteArrayList doesn't
-            // support sort, we use ArrayList sort data instead
-            List<Employee> sorted = new ArrayList<>(col);
-            Collections.sort(sorted, c);
-
-            // SortedSet instance's stream can't be reordered
-            if (!(col instanceof SortedSet)) {
-                Collections.reverse(sorted);
-                for (int i = 0; i < sorted.size(); i++) {
-                    assertEquals(rule.getValue(sorted.get(i)), rule.getValue(reversed.get(i)));
-                }
-            }
-        });
-
-        emptyStreamTestIteration(stream -> {
-            assertFalse(stream.sorted(Collections.reverseOrder()).iterator().hasNext());
-        });
+        super.testSorted(c, employee -> rule.getValue((Employee) employee));
     }
 
     @Test
     @SuppressWarnings("unchecked")
+    @Override
     public void testToArray() throws Exception {
-        singleStreamTestIteration(stream -> c -> {
-            Object[] arr1 = stream.toArray();
-            Object[] arr2 = c.toArray();
-            assert (arr1.length == arr2.length);
-            for (int index = 0; index < arr1.length; index++) {
-                assertEquals(arr1[index], arr2[index]);
-            }
-        });
-
-        emptyStreamTestIteration(stream -> {
-            assertEquals(stream.toArray().length, 0);
-        });
+        super.testToArray();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testUniqueElements() throws Exception {
-        singleStreamTestIteration(stream -> col -> {
-            Set<Employee> set1 = new HashSet<>(col);
-            Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
-            List<Employee> list2 = stream.flatMap(genEmployeeFlatMapper(4, rule)).distinct().collect(Collectors.<Employee>toList());
-            assertEquals(set1.size(), list2.size());
-            assertTrue(set1.containsAll(list2));
-        });
+        Employee.Rule rule = Employee.Rule.values()[rand.nextInt(Employee.Rule.values().length)];
+
+        super.testUniqueElements(genEmployeeFlatMapper(4, rule));
     }
 
     @Override
